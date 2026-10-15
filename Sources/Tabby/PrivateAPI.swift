@@ -27,6 +27,18 @@ enum PrivateAPI {
     // The public replacement (NSRunningApplication) exposes no PSN. Deprecated, not removed.
     private typealias GetPSNFn = @convention(c) (pid_t, UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus
 
+    // SLSMainConnectionID() -> Int32
+    // The window-server connection id that the SLS window queries below require. No public equivalent.
+    private typealias MainConnFn = @convention(c) () -> Int32
+
+    // SLSCopySpacesForWindows(cid, mask, CFArray<windowID>) -> CFArray<spaceID>?
+    // Lists the Spaces a set of windows belong to. ScreenCaptureKit reports ordered-out helper
+    // windows (on no Space) as ordinary off-screen windows; this is the only way to tell them from
+    // windows on another desktop. Mask 0x7 = all Space kinds.
+    private typealias SpacesForWindowsFn = @convention(c) (Int32, Int32, CFArray) -> Unmanaged<CFArray>?
+
+    private static var mainConn: MainConnFn?
+    private static var spacesForWindows: SpacesForWindowsFn?
     private static var axGetWindow: AXGetWindowFn?
     private static var setFront: SetFrontFn?
     private static var postRecord: PostRecordFn?
@@ -47,6 +59,8 @@ enum PrivateAPI {
         setFront = lookup("_SLPSSetFrontProcessWithOptions", SetFrontFn.self)
         postRecord = lookup("SLPSPostEventRecordTo", PostRecordFn.self)
         getPSN = lookup("GetProcessForPID", GetPSNFn.self)
+        mainConn = lookup("SLSMainConnectionID", MainConnFn.self)
+        spacesForWindows = lookup("SLSCopySpacesForWindows", SpacesForWindowsFn.self)
     }
 
     static var canMapAXWindows: Bool { axGetWindow != nil }
@@ -59,7 +73,22 @@ enum PrivateAPI {
         if setFront == nil { m.append("_SLPSSetFrontProcessWithOptions") }
         if postRecord == nil { m.append("SLPSPostEventRecordTo") }
         if getPSN == nil { m.append("GetProcessForPID") }
+        if mainConn == nil { m.append("SLSMainConnectionID") }
+        if spacesForWindows == nil { m.append("SLSCopySpacesForWindows") }
         return m
+    }
+
+    /// Number of Spaces each window belongs to. Empty when the symbols are missing, so callers keep
+    /// current behavior; a window absent from the result is likewise "unknown".
+    static func spaceCounts(for windowIDs: [UInt32]) -> [UInt32: Int] {
+        guard let mainConn, let spacesForWindows else { return [:] }
+        var out: [UInt32: Int] = [:]
+        let cid = mainConn()
+        for wid in windowIDs {
+            guard let spaces = spacesForWindows(cid, 0x7, [NSNumber(value: wid)] as CFArray)?.takeRetainedValue() else { continue }
+            out[wid] = CFArrayGetCount(spaces)
+        }
+        return out
     }
 
     static func windowID(of element: AXUIElement) -> UInt32? {

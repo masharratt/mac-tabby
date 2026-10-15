@@ -6,11 +6,11 @@ import Testing
     private func rec(
         _ id: UInt32, pid: Int32 = 10, app: String = "Safari", bundle: String? = "com.apple.Safari",
         title: String = "Page", w: CGFloat = 800, h: CGFloat = 600, layer: Int = 0,
-        onScreen: Bool = true, regular: Bool = true, appHidden: Bool = false
+        onScreen: Bool = true, regular: Bool = true, appHidden: Bool = false, spaces: Int? = nil
     ) -> WindowRecord {
         WindowRecord(id: id, pid: pid, appName: app, bundleID: bundle, title: title,
                      bounds: CGRect(x: 0, y: 0, width: w, height: h), layer: layer,
-                     isOnScreen: onScreen, ownerIsRegular: regular, isAppHidden: appHidden)
+                     isOnScreen: onScreen, ownerIsRegular: regular, isAppHidden: appHidden, spaceCount: spaces)
     }
     private func ids(_ ws: [WindowInfo]) -> [UInt32] { ws.map(\.id) }
     private let own: Int32 = 999
@@ -49,6 +49,35 @@ import Testing
 
     @Test func keepsUntitledOnScreenWindows() {
         #expect(ids(WindowInventoryRules.merge([rec(1, title: "")], ax: [:], ownPID: own)) == [1])
+    }
+
+    // MARK: Space membership
+
+    /// Regression: ChatGPT's ordered-out helper window (no Space, not on screen) was listed as an
+    /// "other desktop" duplicate of the real window.
+    @Test func phantomOrderedOutWindowIsNotShownAsOtherDesktopDuplicate() {
+        let real = rec(1, app: "ChatGPT", title: "ChatGPT", spaces: 1)
+        let phantom = rec(2, app: "ChatGPT", title: "ChatGPT", onScreen: false, spaces: 0)
+        #expect(ids(WindowInventoryRules.merge([real, phantom], ax: [:], ownPID: own)) == [1])
+    }
+
+    @Test func offScreenWindowOnAnotherSpaceIsKept() {
+        let w = WindowInventoryRules.merge([rec(1, onScreen: false, spaces: 1)], ax: [:], ownPID: own)
+        #expect(ids(w) == [1])
+        #expect(w[0].isOnOtherDesktop)
+    }
+
+    @Test func minimizedWindowWithNoSpaceIsKept() {
+        let ax: [Int32: [AXWindowRecord]] = [10: [AXWindowRecord(windowID: 1, isMinimized: true)]]
+        let w = WindowInventoryRules.merge([rec(1, onScreen: false, spaces: 0)], ax: ax, ownPID: own)
+        #expect(ids(w) == [1])
+        #expect(w[0].isMinimized)
+    }
+
+    @Test func unknownSpaceInfoFallsBackToKeepingOffScreenWindow() {
+        let w = WindowInventoryRules.merge([rec(1, onScreen: false, spaces: nil)], ax: [:], ownPID: own)
+        #expect(ids(w) == [1])
+        #expect(w[0].isOnOtherDesktop)
     }
 
     // MARK: SC + AX merge

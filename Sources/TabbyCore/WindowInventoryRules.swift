@@ -15,12 +15,15 @@ public struct WindowRecord: Equatable, Sendable {
     public var ownerIsRegular: Bool
     /// Owner app is hidden (Cmd+H).
     public var isAppHidden: Bool
+    /// How many Spaces the window belongs to; nil when the private lookup is unavailable.
+    /// Ordered-out helper windows belong to none.
+    public var spaceCount: Int?
 
     public init(id: UInt32, pid: Int32, appName: String, bundleID: String?, title: String, bounds: CGRect,
-                layer: Int, isOnScreen: Bool, ownerIsRegular: Bool, isAppHidden: Bool) {
+                layer: Int, isOnScreen: Bool, ownerIsRegular: Bool, isAppHidden: Bool, spaceCount: Int? = nil) {
         self.id = id; self.pid = pid; self.appName = appName; self.bundleID = bundleID
         self.title = title; self.bounds = bounds; self.layer = layer
-        self.isOnScreen = isOnScreen; self.ownerIsRegular = ownerIsRegular; self.isAppHidden = isAppHidden
+        self.isOnScreen = isOnScreen; self.ownerIsRegular = ownerIsRegular; self.isAppHidden = isAppHidden; self.spaceCount = spaceCount
     }
 }
 
@@ -42,7 +45,8 @@ public enum WindowInventoryRules {
     /// Filters raw records (layer 0, sane size, regular app, not Tabby) and merges AX data.
     /// An off-screen window is: minimized if AX says so, else hidden-app if its app is hidden,
     /// else on another desktop. Untitled off-screen windows are dropped as helper junk unless
-    /// AX confirmed them as minimized. Input order is preserved.
+    /// AX confirmed them as minimized. Off-screen windows known to be on no Space (spaceCount == 0)
+    /// are phantom ordered-out helpers and are dropped unless AX says minimized. Input order is preserved.
     public static func merge(_ records: [WindowRecord], ax: [Int32: [AXWindowRecord]], ownPID: Int32) -> [WindowInfo] {
         var result: [WindowInfo] = []
         for r in records {
@@ -53,6 +57,7 @@ public enum WindowInventoryRules {
             let hidden = !r.isOnScreen && !minimized && r.isAppHidden
             let otherDesktop = !r.isOnScreen && !minimized && !hidden
             if !r.isOnScreen, r.title.isEmpty, !minimized { continue }
+            if !r.isOnScreen, r.spaceCount == 0, !minimized { continue }
             var w = WindowInfo(id: r.id, pid: r.pid, appName: r.appName, title: r.title, bounds: r.bounds)
             w.bundleID = r.bundleID
             w.isMinimized = minimized
