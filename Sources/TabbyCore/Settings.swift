@@ -6,6 +6,11 @@ public enum Layout: String, Codable, Sendable {
     // cfn: P3 adds `appIcons` and `thumbnails`; every consumer switch must then handle them.
 }
 
+/// Thumbnail size for the thumbnails layout (stage 3). Stored now, unused until then.
+public enum ThumbnailSize: String, Codable, CaseIterable, Sendable {
+    case small, medium, large
+}
+
 public struct Settings: Codable, Equatable, Sendable {
     public static let maxShowDelayMilliseconds = 1000
 
@@ -15,6 +20,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var showMinimized = true
     public var showOtherDesktops = true
     public var livePreview = true
+    public var thumbnailSize: ThumbnailSize = .medium
+    public var showHiddenApps = true
 
     public init() {}
 
@@ -28,6 +35,19 @@ public struct Settings: Codable, Equatable, Sendable {
         showMinimized = try c.decodeIfPresent(Bool.self, forKey: .showMinimized) ?? d.showMinimized
         showOtherDesktops = try c.decodeIfPresent(Bool.self, forKey: .showOtherDesktops) ?? d.showOtherDesktops
         livePreview = try c.decodeIfPresent(Bool.self, forKey: .livePreview) ?? d.livePreview
+        thumbnailSize = (try? c.decodeIfPresent(ThumbnailSize.self, forKey: .thumbnailSize)) ?? d.thumbnailSize
+        showHiddenApps = try c.decodeIfPresent(Bool.self, forKey: .showHiddenApps) ?? d.showHiddenApps
+    }
+
+    /// Adds a bundle id or app name to the hidden list; blank and duplicate (case-insensitive) entries are ignored.
+    public mutating func hideApp(_ identifier: String) {
+        let id = identifier.trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty, !hiddenApps.contains(where: { $0.caseInsensitiveCompare(id) == .orderedSame }) else { return }
+        hiddenApps.append(id)
+    }
+
+    public mutating func unhideApp(_ identifier: String) {
+        hiddenApps.removeAll { $0.caseInsensitiveCompare(identifier) == .orderedSame }
     }
 
     public var showDelay: TimeInterval { Double(showDelayMilliseconds) / 1000 }

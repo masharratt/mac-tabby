@@ -72,6 +72,7 @@ public enum WindowInventoryRules {
             if let b = w.bundleID, blocked.contains(b.lowercased()) { return false }
             if !settings.showMinimized, w.isMinimized { return false }
             if !settings.showOtherDesktops, w.isOnOtherDesktop { return false }
+            if !settings.showHiddenApps, w.isAppHidden { return false }
             return true
         }
     }

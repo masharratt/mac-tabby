@@ -1,6 +1,6 @@
 # State Machines
 
-**Last Updated:** 2026-10-15 (stage 2A: window classification added)
+**Last Updated:** 2026-10-15 (stage 2B: settings entity added)
 
 ## 1. Switcher
 
@@ -104,4 +104,30 @@ stateDiagram-v2
   Minimized --> Visible: restore
   OtherDesktop --> Visible: Space change
   Visible --> Dropped: close
+```
+
+## 4. Settings
+
+**Source:** Sources/Tabby/SettingsWindow.swift (SettingsModel), Sources/TabbyCore/Settings.swift
+
+### States
+
+| State | Meaning |
+|-------|---------|
+| Loaded | Settings read from UserDefaults at launch; bad or missing data gives defaults. |
+| Edited | A control in the settings window changed a value. Transient: saves and applies at once. |
+
+### Transitions
+
+| From | To | Trigger | Guard |
+|------|----|---------|-------|
+| Loaded | Edited | Any control changed | Value differs from the current one |
+| Edited | Loaded | Save to UserDefaults, then push to window inventory and switcher engine | None (no relaunch needed) |
+
+### Diagram
+
+```mermaid
+stateDiagram-v2
+  Loaded --> Edited: control changed
+  Edited --> Loaded: saved and applied live
 ```

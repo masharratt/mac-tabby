@@ -58,4 +58,54 @@ import Testing
         SettingsStore.save(s, to: suite)
         #expect(SettingsStore.load(from: suite) == s)
     }
+
+    // MARK: stage 2B
+
+    @Test func newFieldDefaults() {
+        let s = Settings()
+        #expect(s.thumbnailSize == .medium)
+        #expect(s.showHiddenApps)
+    }
+
+    @Test func stage2ASavedDataStillDecodes() throws {
+        // Exactly what stage 2A wrote: no thumbnailSize, no showHiddenApps.
+        let old = #"{"layout":"titles","showDelayMilliseconds":150,"hiddenApps":["Mail"],"showMinimized":false,"showOtherDesktops":true,"livePreview":false}"#
+        let s = try JSONDecoder().decode(Settings.self, from: Data(old.utf8))
+        #expect(s.showDelayMilliseconds == 150)
+        #expect(s.hiddenApps == ["Mail"])
+        #expect(s.showMinimized == false)
+        #expect(s.livePreview == false)
+        #expect(s.thumbnailSize == .medium)
+        #expect(s.showHiddenApps)
+    }
+
+    @Test func newFieldsRoundTrip() throws {
+        var s = Settings()
+        s.thumbnailSize = .large
+        s.showHiddenApps = false
+        let back = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(s))
+        #expect(back == s)
+    }
+
+    @Test func unknownThumbnailSizeFallsBackToMedium() throws {
+        let s = try JSONDecoder().decode(Settings.self, from: Data(#"{"thumbnailSize":"gigantic"}"#.utf8))
+        #expect(s.thumbnailSize == .medium)
+    }
+
+    @Test func hideAppAddsOnceCaseInsensitively() {
+        var s = Settings()
+        s.hideApp("com.apple.Safari")
+        s.hideApp("COM.APPLE.SAFARI")
+        s.hideApp("  ")
+        #expect(s.hiddenApps == ["com.apple.Safari"])
+    }
+
+    @Test func unhideAppRemovesCaseInsensitively() {
+        var s = Settings()
+        s.hiddenApps = ["Mail", "com.apple.Safari"]
+        s.unhideApp("com.apple.safari")
+        #expect(s.hiddenApps == ["Mail"])
+        s.unhideApp("not-there")
+        #expect(s.hiddenApps == ["Mail"])
+    }
 }

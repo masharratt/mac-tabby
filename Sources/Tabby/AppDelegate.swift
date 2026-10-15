@@ -3,9 +3,10 @@ import Carbon.HIToolbox
 import TabbyCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private let settings = SettingsStore.load()
-    private lazy var inventory = WindowInventory(settings: settings)
-    private lazy var engine = SwitcherEngine(source: inventory, settings: settings)
+    private let settingsModel = SettingsModel(settings: SettingsStore.load())
+    private lazy var inventory = WindowInventory(settings: settingsModel.settings)
+    private lazy var engine = SwitcherEngine(source: inventory, settings: settingsModel.settings)
+    private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
     private let tap = KeyEventTap()
     private let panel = SwitcherPanel()
     private let onboarding = OnboardingWindowController()
@@ -21,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         PrivateAPI.resolve()
         buildMenu()
         wireEngine()
+        settingsModel.onChange = { [inventory, engine] s in
+            inventory.apply(s)
+            engine.apply(s)
+        }
         WindowFocuser.onFocused = { [inventory] id in inventory.noteFocused(id) }
         inventory.start()
         pollPermissions()
@@ -110,6 +115,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let perms = NSMenuItem(title: "Permissions\u{2026}", action: #selector(showPermissions), keyEquivalent: "")
         perms.target = self
         menu.addItem(perms)
+        let prefs = NSMenuItem(title: "Settings\u{2026}", action: #selector(showSettings), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Tabby", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -130,4 +138,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showPermissions() { onboarding.present() }
+    @objc private func showSettings() { settingsWindow.present() }
 }

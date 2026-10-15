@@ -135,4 +135,12 @@ import Testing
         var s = Settings(); s.hiddenApps = ["com.apple.Safari"]
         #expect(ids(WindowInventoryRules.visible(infos(), settings: s)) == [2, 3])
     }
+
+    @Test func showHiddenAppsOffHidesHiddenAppWindows() {
+        var h = WindowInfo(id: 4, pid: 4, appName: "Preview", title: "d"); h.isAppHidden = true
+        let all = infos() + [h]
+        #expect(ids(WindowInventoryRules.visible(all, settings: Settings())) == [1, 2, 3, 4])
+        var s = Settings(); s.showHiddenApps = false
+        #expect(ids(WindowInventoryRules.visible(all, settings: s)) == [1, 2, 3])
+    }
 }
