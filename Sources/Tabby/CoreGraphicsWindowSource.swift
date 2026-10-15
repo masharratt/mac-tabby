@@ -2,8 +2,9 @@ import AppKit
 import CoreGraphics
 import TabbyCore
 
-/// P1 window source: public CoreGraphics only, windows on the current Space, front to back.
-/// P2 replaces this with a ScreenCaptureKit-backed source (all Spaces, minimized, hidden).
+/// Public CoreGraphics list of current-Space windows, front to back. WindowInventory uses it to
+/// seed MRU order at launch and as the fallback when ScreenCaptureKit is unavailable.
+/// Does OS work inline, so it must never sit on the Option+Tab path directly.
 struct CoreGraphicsWindowSource: WindowSource {
     private let ownPID = ProcessInfo.processInfo.processIdentifier
     private static let minimumSide: CGFloat = 40

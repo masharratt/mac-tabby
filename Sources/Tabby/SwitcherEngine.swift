@@ -73,8 +73,7 @@ final class SwitcherEngine {
         }
     }
 
-    /// The window list is read on the tap thread; CGWindowList is a few milliseconds.
-    /// cfn: synchronous fetch on key-down, P2 reads a background-refreshed cache instead.
+    /// Runs on the tap thread: `source` must only read its cache, never query the OS.
     private func arm(reverse: Bool) -> Bool {
         if IsSecureEventInputEnabled() { return false }
         let list = source.currentWindows()

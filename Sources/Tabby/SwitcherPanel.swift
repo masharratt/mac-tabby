@@ -78,11 +78,19 @@ final class SwitcherPanel: NSPanel {
             let row = RowView(
                 frame: NSRect(x: Self.padding, y: y, width: frame.width - Self.padding * 2, height: Self.rowHeight),
                 title: windows[index].displayTitle,
+                marker: Self.marker(for: windows[index]),
                 icon: icons[windows[index].pid],
                 selected: index == selection
             )
             background.addSubview(row)
         }
+    }
+
+    /// Small right-aligned tag: minimized wins over other desktop (a minimized window has no desktop).
+    private static func marker(for w: WindowInfo) -> String? {
+        if w.isMinimized { return "Minimized" }
+        if w.isOnOtherDesktop { return "Other desktop" }
+        return nil
     }
 
     private static func screenUnderMouse() -> NSScreen {
@@ -92,7 +100,7 @@ final class SwitcherPanel: NSPanel {
 }
 
 private final class RowView: NSView {
-    init(frame: NSRect, title: String, icon: NSImage?, selected: Bool) {
+    init(frame: NSRect, title: String, marker: String?, icon: NSImage?, selected: Bool) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.cornerRadius = 8
@@ -107,7 +115,18 @@ private final class RowView: NSView {
         label.textColor = selected ? .alternateSelectedControlTextColor : .labelColor
         label.lineBreakMode = .byTruncatingTail
         let h = label.intrinsicContentSize.height
-        label.frame = NSRect(x: 38, y: (frame.height - h) / 2, width: frame.width - 46, height: h)
+        var labelWidth = frame.width - 46
+        if let marker {
+            let tag = NSTextField(labelWithString: marker)
+            tag.font = .systemFont(ofSize: 11)
+            tag.textColor = selected ? .alternateSelectedControlTextColor : .secondaryLabelColor
+            let size = tag.intrinsicContentSize
+            tag.frame = NSRect(x: frame.width - 8 - size.width, y: (frame.height - size.height) / 2,
+                               width: size.width, height: size.height)
+            addSubview(tag)
+            labelWidth -= size.width + 8
+        }
+        label.frame = NSRect(x: 38, y: (frame.height - h) / 2, width: labelWidth, height: h)
         addSubview(label)
     }
 

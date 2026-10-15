@@ -8,6 +8,13 @@ public struct WindowInfo: Equatable, Sendable, Identifiable {
     public var appName: String
     public var title: String
     public var bounds: CGRect
+    public var bundleID: String?
+    /// Minimized to the Dock.
+    public var isMinimized = false
+    /// On a different Space than the current one (not minimized, not hidden).
+    public var isOnOtherDesktop = false
+    /// Its app is hidden (Cmd+H).
+    public var isAppHidden = false
 
     public init(id: UInt32, pid: Int32, appName: String, title: String, bounds: CGRect = .zero) {
         self.id = id
@@ -24,9 +31,9 @@ public struct WindowInfo: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Where the switcher gets its windows. P1: public CoreGraphics, current Space only.
-/// P2 adds a ScreenCaptureKit-backed source covering all Spaces, minimized and hidden windows.
+/// Where the switcher gets its windows. Must be cheap: it is called when Option+Tab is pressed,
+/// so implementations return a cached list and never do OS inventory work inline.
 public protocol WindowSource: Sendable {
-    /// Front-to-back (P2: most recently used first).
+    /// Most recently used first.
     func currentWindows() -> [WindowInfo]
 }

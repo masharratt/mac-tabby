@@ -1,6 +1,6 @@
 # State Machines
 
-**Last Updated:** 2026-10-15 (phase 1: switcher and key tap)
+**Last Updated:** 2026-10-15 (stage 2A: window classification added)
 
 ## 1. Switcher
 
@@ -67,4 +67,41 @@ stateDiagram-v2
   Stopped --> Running: Accessibility granted
   Running --> Stopped: Accessibility revoked
   Running --> Running: re-enabled after disable
+```
+
+## 3. Window Placement
+
+**Source:** Sources/TabbyCore/WindowInventoryRules.swift (merge)
+
+### States
+
+| State | Meaning |
+|-------|---------|
+| Visible | On screen in the current Space. No tag. |
+| Minimized | Off screen and Accessibility reports it minimized. Tagged "Minimized". |
+| Hidden app | Off screen and its app is hidden. No tag. |
+| Other desktop | Off screen, not minimized, app not hidden. Tagged "Other desktop". |
+| Dropped | Not listed: wrong layer, under 40 px, non-regular app, Tabby itself, or untitled off-screen. |
+
+### Transitions
+
+| From | To | Trigger | Guard |
+|------|----|---------|-------|
+| Visible | Minimized | Inventory refresh | Off screen and AX minimized for that window id |
+| Visible | Other desktop | Inventory refresh (Space change) | Off screen, not minimized, app not hidden |
+| Visible | Hidden app | Inventory refresh (Cmd+H) | Off screen and app hidden |
+| Minimized | Visible | Inventory refresh | On screen again |
+| Other desktop | Visible | Inventory refresh (Space change) | On screen |
+| Any | Dropped | Window closes | Absent from the next ScreenCaptureKit list |
+
+### Diagram
+
+```mermaid
+stateDiagram-v2
+  Visible --> Minimized: minimize
+  Visible --> OtherDesktop: Space change
+  Visible --> HiddenApp: Cmd+H
+  Minimized --> Visible: restore
+  OtherDesktop --> Visible: Space change
+  Visible --> Dropped: close
 ```

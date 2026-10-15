@@ -4,7 +4,8 @@ import TabbyCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = SettingsStore.load()
-    private lazy var engine = SwitcherEngine(source: CoreGraphicsWindowSource(), settings: settings)
+    private lazy var inventory = WindowInventory(settings: settings)
+    private lazy var engine = SwitcherEngine(source: inventory, settings: settings)
     private let tap = KeyEventTap()
     private let panel = SwitcherPanel()
     private let onboarding = OnboardingWindowController()
@@ -17,8 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var closeOnboardingWhenTrusted = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        PrivateAPI.resolve()
         buildMenu()
         wireEngine()
+        WindowFocuser.onFocused = { [inventory] id in inventory.noteFocused(id) }
+        inventory.start()
         pollPermissions()
         if !Permissions.accessibility {
             closeOnboardingWhenTrusted = true
@@ -118,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             statusLine.title = "Keyboard hook not running"
         } else if IsSecureEventInputEnabled() {
             statusLine.title = "Paused: secure input is on"
+        } else if !PrivateAPI.missingSymbols.isEmpty {
+            statusLine.title = "Active (basic focus: some system calls unavailable)"
         } else {
             statusLine.title = "Active: hold Option, press Tab"
         }

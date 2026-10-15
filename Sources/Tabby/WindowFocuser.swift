@@ -2,53 +2,46 @@ import AppKit
 import ApplicationServices
 import TabbyCore
 
-/// Brings a window to the front using public Accessibility + AppKit APIs.
-/// P2 adds the private-API path for windows on other Spaces (see PrivateAPI.swift, not yet written).
+/// Brings a window to the front. Preferred path: unminimize via AX when reachable, then the
+/// SkyLight call that works across Spaces, then AXRaise. Fallback when any private symbol is
+/// missing or the call fails: public activate + AXRaise (current Space only).
 enum WindowFocuser {
+    /// Called with the window id after a focus attempt so MRU order updates immediately.
+    static var onFocused: ((UInt32) -> Void)?
+
     static func focus(_ window: WindowInfo) {
-        let app = AXUIElementCreateApplication(window.pid)
-        if let axWindow = matchingAXWindow(for: window, in: app) {
+        let app = AXWindows.application(window.pid)
+        let axWindow = matchingAXWindow(for: window, in: app)
+        if let axWindow, AXWindows.bool(axWindow, kAXMinimizedAttribute) == true {
+            AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        }
+        let usedSkyLight = PrivateAPI.bringToFront(pid: window.pid, windowID: window.id)
+        if let axWindow {
             AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
             AXUIElementSetAttributeValue(axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         }
-        AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-        NSRunningApplication(processIdentifier: window.pid)?.activate()
+        if !usedSkyLight {
+            AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+            NSRunningApplication(processIdentifier: window.pid)?.activate()
+        }
+        onFocused?(window.id)
     }
 
-    /// Matches by frame first (titles can repeat), then by title.
+    /// Matches by window id when the private call works, else frame, then title.
+    /// Off-Space windows are not in the AX list, so this returns nil for them.
     private static func matchingAXWindow(for window: WindowInfo, in app: AXUIElement) -> AXUIElement? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
-              let axWindows = value as? [AXUIElement] else { return nil }
-        if let byFrame = axWindows.first(where: { frame(of: $0).map { near($0, window.bounds) } ?? false }) {
+        let axWindows = AXWindows.windows(of: app)
+        if let byID = axWindows.first(where: { PrivateAPI.windowID(of: $0) == window.id }) { return byID }
+        if let byFrame = axWindows.first(where: { AXWindows.frame(of: $0).map { near($0, window.bounds) } ?? false }) {
             return byFrame
         }
         guard !window.title.isEmpty else { return nil }
-        return axWindows.first { string($0, kAXTitleAttribute) == window.title }
+        return axWindows.first { AXWindows.string($0, kAXTitleAttribute) == window.title }
     }
 
     private static func near(_ a: CGRect, _ b: CGRect) -> Bool {
         let t: CGFloat = 2
         return abs(a.minX - b.minX) <= t && abs(a.minY - b.minY) <= t
             && abs(a.width - b.width) <= t && abs(a.height - b.height) <= t
-    }
-
-    private static func frame(of element: AXUIElement) -> CGRect? {
-        var pos: CFTypeRef?
-        var size: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &pos) == .success,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
-              let pos, let size else { return nil }
-        var p = CGPoint.zero
-        var s = CGSize.zero
-        guard AXValueGetValue(pos as! AXValue, .cgPoint, &p),
-              AXValueGetValue(size as! AXValue, .cgSize, &s) else { return nil }
-        return CGRect(origin: p, size: s)
-    }
-
-    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
-        return value as? String
     }
 }
