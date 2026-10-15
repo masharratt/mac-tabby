@@ -45,7 +45,7 @@ class SwitcherItemView: NSView {
         guard visible else { lights?.isHidden = true; quit?.isHidden = true; return }
         if lights == nil {
             let press: (ItemAction) -> Void = { [weak self] in self?.onAction?($0) }
-            let l = ControlClusterView(specs: ControlClusterView.trafficLights, glyphsOnHoverOnly: true, onAction: press)
+            let l = ControlClusterView(specs: ControlClusterView.trafficLights, glyphsOnHoverOnly: false, onAction: press)
             let q = ControlClusterView(specs: [ControlClusterView.quitSpec], glyphsOnHoverOnly: false, onAction: press)
             lights = l; quit = q
             addSubview(l); addSubview(q)
