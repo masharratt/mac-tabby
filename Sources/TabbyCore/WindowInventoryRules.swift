@@ -15,15 +15,15 @@ public struct WindowRecord: Equatable, Sendable {
     public var ownerIsRegular: Bool
     /// Owner app is hidden (Cmd+H).
     public var isAppHidden: Bool
-    /// How many Spaces the window belongs to; nil when the private lookup is unavailable.
+    /// Ids of the Spaces the window belongs to; nil when the private lookup is unavailable.
     /// Ordered-out helper windows belong to none.
-    public var spaceCount: Int?
+    public var spaceIDs: [Int]?
 
     public init(id: UInt32, pid: Int32, appName: String, bundleID: String?, title: String, bounds: CGRect,
-                layer: Int, isOnScreen: Bool, ownerIsRegular: Bool, isAppHidden: Bool, spaceCount: Int? = nil) {
+                layer: Int, isOnScreen: Bool, ownerIsRegular: Bool, isAppHidden: Bool, spaceIDs: [Int]? = nil) {
         self.id = id; self.pid = pid; self.appName = appName; self.bundleID = bundleID
         self.title = title; self.bounds = bounds; self.layer = layer
-        self.isOnScreen = isOnScreen; self.ownerIsRegular = ownerIsRegular; self.isAppHidden = isAppHidden; self.spaceCount = spaceCount
+        self.isOnScreen = isOnScreen; self.ownerIsRegular = ownerIsRegular; self.isAppHidden = isAppHidden; self.spaceIDs = spaceIDs
     }
 }
 
@@ -46,8 +46,12 @@ public enum WindowInventoryRules {
     /// An off-screen window is: minimized if AX says so, else hidden-app if its app is hidden,
     /// else on another desktop. Untitled off-screen windows are dropped as helper junk unless
     /// AX confirmed them as minimized. Off-screen windows known to be on no Space (spaceCount == 0)
-    /// are phantom ordered-out helpers and are dropped unless AX says minimized. Input order is preserved.
-    public static func merge(_ records: [WindowRecord], ax: [Int32: [AXWindowRecord]], ownPID: Int32) -> [WindowInfo] {
+    /// are phantom ordered-out helpers and are dropped unless AX says minimized. Off-screen windows
+    /// whose Spaces are all currently visible (one per display) are ordered-out leftovers of the
+    /// visible desktop and are dropped unless minimized or the app is hidden. `visibleSpaces` nil
+    /// (lookup unavailable) keeps off-screen windows that have Spaces. Input order is preserved.
+    public static func merge(_ records: [WindowRecord], ax: [Int32: [AXWindowRecord]], ownPID: Int32,
+                             visibleSpaces: Set<Int>? = nil) -> [WindowInfo] {
         var result: [WindowInfo] = []
         for r in records {
             guard r.layer == 0, r.ownerIsRegular, r.pid != ownPID,
@@ -57,7 +61,10 @@ public enum WindowInventoryRules {
             let hidden = !r.isOnScreen && !minimized && r.isAppHidden
             let otherDesktop = !r.isOnScreen && !minimized && !hidden
             if !r.isOnScreen, r.title.isEmpty, !minimized { continue }
-            if !r.isOnScreen, r.spaceCount == 0, !minimized { continue }
+            if !r.isOnScreen, let spaces = r.spaceIDs, !minimized {
+                if spaces.isEmpty { continue }
+                if !r.isAppHidden, let visible = visibleSpaces, spaces.allSatisfy(visible.contains) { continue }
+            }
             var w = WindowInfo(id: r.id, pid: r.pid, appName: r.appName, title: r.title, bounds: r.bounds)
             w.bundleID = r.bundleID
             w.isMinimized = minimized

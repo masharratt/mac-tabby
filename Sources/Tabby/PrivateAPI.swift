@@ -37,6 +37,12 @@ enum PrivateAPI {
     // windows on another desktop. Mask 0x7 = all Space kinds.
     private typealias SpacesForWindowsFn = @convention(c) (Int32, Int32, CFArray) -> Unmanaged<CFArray>?
 
+    // SLSCopyManagedDisplaySpaces(cid) -> CFArray<display dict>
+    // Per display, "Current Space" -> "ManagedSpaceID" is the Space showing now. Needed to tell a
+    // window on another desktop from an ordered-out window of a visible Space.
+    private typealias DisplaySpacesFn = @convention(c) (Int32) -> Unmanaged<CFArray>?
+
+    private static var displaySpaces: DisplaySpacesFn?
     private static var mainConn: MainConnFn?
     private static var spacesForWindows: SpacesForWindowsFn?
     private static var axGetWindow: AXGetWindowFn?
@@ -61,6 +67,7 @@ enum PrivateAPI {
         getPSN = lookup("GetProcessForPID", GetPSNFn.self)
         mainConn = lookup("SLSMainConnectionID", MainConnFn.self)
         spacesForWindows = lookup("SLSCopySpacesForWindows", SpacesForWindowsFn.self)
+        displaySpaces = lookup("SLSCopyManagedDisplaySpaces", DisplaySpacesFn.self)
     }
 
     static var canMapAXWindows: Bool { axGetWindow != nil }
@@ -75,20 +82,34 @@ enum PrivateAPI {
         if getPSN == nil { m.append("GetProcessForPID") }
         if mainConn == nil { m.append("SLSMainConnectionID") }
         if spacesForWindows == nil { m.append("SLSCopySpacesForWindows") }
+        if displaySpaces == nil { m.append("SLSCopyManagedDisplaySpaces") }
         return m
     }
 
-    /// Number of Spaces each window belongs to. Empty when the symbols are missing, so callers keep
+    /// Space ids each window belongs to. Empty when the symbols are missing, so callers keep
     /// current behavior; a window absent from the result is likewise "unknown".
-    static func spaceCounts(for windowIDs: [UInt32]) -> [UInt32: Int] {
+    static func spaces(for windowIDs: [UInt32]) -> [UInt32: [Int]] {
         guard let mainConn, let spacesForWindows else { return [:] }
-        var out: [UInt32: Int] = [:]
+        var out: [UInt32: [Int]] = [:]
         let cid = mainConn()
         for wid in windowIDs {
             guard let spaces = spacesForWindows(cid, 0x7, [NSNumber(value: wid)] as CFArray)?.takeRetainedValue() else { continue }
-            out[wid] = CFArrayGetCount(spaces)
+            out[wid] = (spaces as? [NSNumber])?.map(\.intValue) ?? []
         }
         return out
+    }
+
+    /// Ids of the Spaces currently showing, one per display; nil when unavailable or unparseable.
+    static func visibleSpaceIDs() -> Set<Int>? {
+        guard let mainConn, let displaySpaces,
+              let displays = displaySpaces(mainConn())?.takeRetainedValue() as? [[String: Any]] else { return nil }
+        var ids = Set<Int>()
+        for d in displays {
+            guard let cur = d["Current Space"] as? [String: Any],
+                  let id = (cur["ManagedSpaceID"] ?? cur["id64"]) as? NSNumber else { continue }
+            ids.insert(id.intValue)
+        }
+        return ids.isEmpty ? nil : ids
     }
 
     static func windowID(of element: AXUIElement) -> UInt32? {

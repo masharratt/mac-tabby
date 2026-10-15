@@ -199,7 +199,7 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
         setHandles(handles)
         var policy: [pid_t: NSRunningApplication?] = [:]
         var records: [WindowRecord] = []
-        let spaces = PrivateAPI.spaceCounts(for: content.windows.filter { !$0.isOnScreen }.map(\.windowID))
+        let spaces = PrivateAPI.spaces(for: content.windows.filter { !$0.isOnScreen }.map(\.windowID))
         for w in content.windows {
             guard let owner = w.owningApplication else { continue }
             let pid = owner.processID
@@ -209,7 +209,7 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
                 id: w.windowID, pid: pid, appName: owner.applicationName,
                 bundleID: owner.bundleIdentifier, title: w.title ?? "", bounds: w.frame,
                 layer: w.windowLayer, isOnScreen: w.isOnScreen,
-                ownerIsRegular: app?.activationPolicy == .regular, isAppHidden: app?.isHidden ?? false, spaceCount: spaces[w.windowID]
+                ownerIsRegular: app?.activationPolicy == .regular, isAppHidden: app?.isHidden ?? false, spaceIDs: spaces[w.windowID]
             ))
         }
         // AX only for apps with an off-screen window: that is where "minimized" must be told apart.
@@ -221,6 +221,6 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
                 c.resume(returning: out)
             }
         }
-        return WindowInventoryRules.merge(records, ax: ax, ownPID: ownPID)
+        return WindowInventoryRules.merge(records, ax: ax, ownPID: ownPID, visibleSpaces: PrivateAPI.visibleSpaceIDs())
     }
 }
