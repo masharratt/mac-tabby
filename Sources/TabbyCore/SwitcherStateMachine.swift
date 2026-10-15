@@ -25,6 +25,14 @@ public enum SwitcherEvent: Equatable, Sendable {
     case otherKey
     /// Periodic clock tick; drives the show delay.
     case tick
+    /// Mouse went down outside the visible panel.
+    case outsideClick
+    /// Mouse went down on the item at this index.
+    case itemClick(Int)
+    /// Pointer entered the item at this index.
+    case hover(Int)
+    /// These indices were closed or quit from the panel; the list shrank in place.
+    case windowsRemoved([Int])
 }
 
 public enum SwitcherEffect: Equatable, Sendable {
@@ -34,6 +42,8 @@ public enum SwitcherEffect: Equatable, Sendable {
     case commit(Int)
     /// Hide the panel, focus nothing.
     case cancel
+    /// The list changed in place (windows removed); redraw and select this index.
+    case listChanged(selection: Int)
 }
 
 public struct SwitcherOutput: Equatable, Sendable {
@@ -105,6 +115,29 @@ public struct SwitcherStateMachine: Sendable {
             return finish(.cancel, swallow: true)
         case .otherKey:
             return SwitcherOutput(swallow: true, effects: [])
+        case .outsideClick:
+            // While armed the panel is not on screen, so nothing can be "outside" it.
+            guard state == .shown else { return SwitcherOutput(swallow: false, effects: []) }
+            return finish(.cancel, swallow: true)
+        case let .itemClick(index):
+            guard state == .shown, (0..<windowCount).contains(index) else {
+                return SwitcherOutput(swallow: false, effects: [])
+            }
+            return finish(.commit(index), swallow: true)
+        case let .hover(index):
+            guard state == .shown, (0..<windowCount).contains(index), index != selection else {
+                return SwitcherOutput(swallow: false, effects: [])
+            }
+            selection = index
+            return SwitcherOutput(swallow: false, effects: [.selectionChanged(index)])
+        case let .windowsRemoved(indices):
+            let removed = Set(indices)
+            guard let next = SelectionIndex.afterRemoval(selected: selection, removed: removed, count: windowCount) else {
+                return finish(.cancel, swallow: false)
+            }
+            windowCount = SelectionIndex.remainingCount(count: windowCount, removed: removed)
+            selection = next
+            return SwitcherOutput(swallow: false, effects: state == .shown ? [.listChanged(selection: next)] : [])
         case .tick:
             if state == .armed, now - armedAt >= showDelay {
                 state = .shown

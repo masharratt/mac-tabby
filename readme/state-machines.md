@@ -1,6 +1,6 @@
 # State Machines
 
-**Last Updated:** 2026-10-15 (stage 3A: thumbnail entry entity added)
+**Last Updated:** 2026-10-15 (stage 3B: mouse events added to Switcher)
 
 ## 1. Switcher
 
@@ -28,6 +28,11 @@
 | Shown | Idle | Option released or Return | Commits the selection |
 | Armed | Idle | Esc | Cancels |
 | Shown | Idle | Esc | Cancels |
+| Shown | Idle | Click outside the panel | Cancels; the click is swallowed |
+| Shown | Idle | Click on an item | Commits that item; Option may still be held |
+| Shown | Shown | Pointer hovers another item | Selection moves to it |
+| Shown | Shown | Windows closed or quit from hover controls | List shrinks in place; selection moves to the item that took its place, or the new last item |
+| Shown | Idle | Windows closed or quit from hover controls | Nothing left: cancels |
 | Armed | Idle | Tap disabled or permission lost | Reset without effects |
 | Shown | Idle | Tap disabled or permission lost | Reset without effects |
 
@@ -39,6 +44,8 @@ stateDiagram-v2
   Armed --> Shown: delay or arrow
   Armed --> Idle: release, Return, Esc
   Shown --> Idle: release, Return, Esc
+  Shown --> Idle: outside click, item click
+  Shown --> Shown: hover, removal
 ```
 
 ## 2. Key Tap

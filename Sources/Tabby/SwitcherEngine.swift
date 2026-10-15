@@ -15,6 +15,10 @@ final class SwitcherEngine {
     private var machine: SwitcherStateMachine
     private var windows: [WindowInfo] = []
     private let source: WindowSource
+    /// Panel frame in global top-left coordinates while it is on screen; nil otherwise.
+    private var panelFrame: CGRect?
+    /// Mouse-down types whose matching mouse-up must be swallowed too.
+    private var swallowedUps: Set<CGEventType> = []
 
     init(source: WindowSource, settings: Settings) {
         self.source = source
@@ -27,7 +31,41 @@ final class SwitcherEngine {
         locked { machine.showDelay = settings.showDelay }
     }
 
-    func reset() { locked { machine.reset() } }
+    func reset() {
+        locked {
+            machine.reset()
+            panelFrame = nil
+            swallowedUps = []
+        }
+    }
+
+    /// Main thread. Tells the tap where the panel is so it can tell "outside" clicks from item clicks.
+    func setPanelFrame(_ frame: CGRect?) { locked { panelFrame = frame } }
+
+    func snapshot() -> (windows: [WindowInfo], selection: Int) { locked { (windows, machine.selection) } }
+
+    /// Main thread: pointer entered an item.
+    func hover(_ index: Int) { feed(.hover(index)) }
+
+    /// Main thread: click landed on an item.
+    func itemClick(_ index: Int) { feed(.itemClick(index)) }
+
+    /// Main thread: these windows were closed or their app quit; the list shrinks in place.
+    func removeWindows(ids: Set<UInt32>) {
+        let indices: [Int] = locked {
+            let hit = windows.indices.filter { ids.contains(windows[$0].id) }
+            for i in hit.reversed() { windows.remove(at: i) }
+            return hit
+        }
+        if !indices.isEmpty { feed(.windowsRemoved(indices)) }
+    }
+
+    /// Main thread: edit one window's flags (e.g. minimized) without changing the selection.
+    func updateWindow(id: UInt32, _ edit: (inout WindowInfo) -> Void) {
+        locked {
+            if let i = windows.firstIndex(where: { $0.id == id }) { edit(&windows[i]) }
+        }
+    }
 
     /// Event tap thread. Returns true when the keystroke must be swallowed.
     func process(_ type: CGEventType, _ event: CGEvent) -> Bool {
@@ -41,9 +79,24 @@ final class SwitcherEngine {
             return feed(.tabKeyUp)
         case .keyDown:
             return keyDown(code: Int(event.getIntegerValueField(.keyboardEventKeycode)), flags: flags)
+        case .leftMouseDown, .rightMouseDown:
+            return mouseDown(type, at: event.location)
+        case .leftMouseUp, .rightMouseUp:
+            let down: CGEventType = type == .leftMouseUp ? .leftMouseDown : .rightMouseDown
+            return locked { swallowedUps.remove(down) != nil }
         default:
             return false
         }
+    }
+
+    /// A click outside the visible panel cancels the switcher. It is swallowed (with its mouse-up)
+    /// so the click does not also activate or press something in the app underneath.
+    private func mouseDown(_ type: CGEventType, at point: CGPoint) -> Bool {
+        let outside = locked { machine.state == .shown && panelFrame.map { !$0.contains(point) } == true }
+        guard outside else { return false }
+        let swallow = feed(.outsideClick)
+        if swallow { locked { _ = swallowedUps.insert(type) } }
+        return swallow
     }
 
     /// Main thread, ~25 ms while the switcher is armed or shown.

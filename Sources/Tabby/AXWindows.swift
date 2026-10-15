@@ -34,6 +34,24 @@ enum AXWindows {
         return PrivateAPI.windowID(of: value as! AXUIElement)
     }
 
+    /// The AX element for a window: by window id when the private call works, else frame, then
+    /// title. Off-Space windows are not in the AX list, so this returns nil for them.
+    static func element(for window: WindowInfo) -> AXUIElement? {
+        let axWindows = windows(of: application(window.pid))
+        if let byID = axWindows.first(where: { PrivateAPI.windowID(of: $0) == window.id }) { return byID }
+        if let byFrame = axWindows.first(where: { frame(of: $0).map { near($0, window.bounds) } ?? false }) {
+            return byFrame
+        }
+        guard !window.title.isEmpty else { return nil }
+        return axWindows.first { string($0, kAXTitleAttribute) == window.title }
+    }
+
+    private static func near(_ a: CGRect, _ b: CGRect) -> Bool {
+        let t: CGFloat = 2
+        return abs(a.minX - b.minX) <= t && abs(a.minY - b.minY) <= t
+            && abs(a.width - b.width) <= t && abs(a.height - b.height) <= t
+    }
+
     static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }

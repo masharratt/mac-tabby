@@ -26,4 +26,20 @@ public enum SelectionIndex {
         let start = min(max(sel - capacity / 2, 0), count - capacity)
         return start..<(start + capacity)
     }
+
+    /// Number of items left after removing `removed` (duplicates and out-of-range indices ignored).
+    public static func remainingCount(count: Int, removed: Set<Int>) -> Int {
+        count - removed.filter { (0..<count).contains($0) }.count
+    }
+
+    /// Where the selection lands after items are removed in place. A surviving selection keeps
+    /// pointing at the same item; a removed selection moves to the item that took its place, or
+    /// the new last item when it was at the end. Nil when nothing is left.
+    public static func afterRemoval(selected: Int, removed: Set<Int>, count: Int) -> Int? {
+        let valid = removed.filter { (0..<count).contains($0) }
+        let left = count - valid.count
+        guard left > 0 else { return nil }
+        let before = valid.filter { $0 < selected }.count
+        return min(max(selected - before, 0), left - 1)
+    }
 }

@@ -6,6 +6,16 @@ class SwitcherItemView: NSView {
     let windowID: UInt32
     private(set) var isSelectedItem = false
 
+    /// Position in the window list; set by the panel.
+    var index = 0
+    /// Pointer entered or moved over the item.
+    var onHover: (() -> Void)?
+    var onClick: (() -> Void)?
+    var onAction: ((ItemAction) -> Void)?
+    /// Row layouts centre the controls on the right edge; tiles put them in the top-right corner.
+    var controlsAreCompact: Bool { false }
+    private var controls: ItemControlsView?
+
     init(frame: NSRect, windowID: UInt32) {
         self.windowID = windowID
         super.init(frame: frame)
@@ -27,6 +37,34 @@ class SwitcherItemView: NSView {
     func setThumbnail(_ image: CGImage?) {}
     func restyleText() {}
 
+    func setControlsVisible(_ visible: Bool) {
+        guard visible else { controls?.isHidden = true; return }
+        if controls == nil {
+            let view = ItemControlsView { [weak self] in self?.onAction?($0) }
+            controls = view
+            addSubview(view)
+        }
+        guard let controls else { return }
+        let size = controls.fittingSize
+        let y = controlsAreCompact ? (bounds.height - size.height) / 2 : bounds.height - size.height - 6
+        controls.frame = NSRect(x: bounds.width - size.width - 6, y: y, width: size.width, height: size.height)
+        controls.isHidden = false
+    }
+
+    // MARK: Mouse
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) { onClick?() }
+    override func mouseEntered(with event: NSEvent) { onHover?() }
+    override func mouseMoved(with event: NSEvent) { onHover?() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
     var primaryTextColor: NSColor { isSelectedItem ? .alternateSelectedControlTextColor : .labelColor }
     var secondaryTextColor: NSColor { isSelectedItem ? .alternateSelectedControlTextColor : .secondaryLabelColor }
 }
@@ -35,6 +73,8 @@ class SwitcherItemView: NSView {
 final class RowItemView: SwitcherItemView {
     private let label: NSTextField
     private let markerLabel: NSTextField?
+
+    override var controlsAreCompact: Bool { true }
 
     init(frame: NSRect, window: WindowInfo, marker: String?, icon: NSImage?) {
         label = NSTextField(labelWithString: window.displayTitle)
@@ -142,4 +182,61 @@ final class TileItemView: SwitcherItemView {
     }
 
     override func restyleText() { label.textColor = primaryTextColor }
+}
+
+/// Small row of window controls shown over the hovered item: close, minimize, full screen, quit app.
+final class ItemControlsView: NSView {
+    private static let buttons: [(ItemAction, String, String)] = [
+        (.close, "xmark.circle.fill", "Close window"),
+        (.minimize, "minus.circle.fill", "Minimize or restore window"),
+        (.toggleFullScreen, "arrow.up.left.and.arrow.down.right.circle.fill", "Toggle full screen"),
+        (.quitApp, "power.circle.fill", "Quit app"),
+    ]
+    private static let side: CGFloat = 20
+    private static let pad: CGFloat = 4
+
+    init(onAction: @escaping (ItemAction) -> Void) {
+        let n = CGFloat(Self.buttons.count)
+        let size = NSSize(width: n * Self.side + (n + 1) * Self.pad, height: Self.side + 2 * Self.pad)
+        super.init(frame: NSRect(origin: .zero, size: size))
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+        layer?.cornerRadius = size.height / 2
+        for (i, spec) in Self.buttons.enumerated() {
+            let button = ControlButton(action: spec.0, symbol: spec.1, tip: spec.2, onPress: onAction)
+            button.frame = NSRect(x: Self.pad + CGFloat(i) * (Self.side + Self.pad), y: Self.pad, width: Self.side, height: Self.side)
+            addSubview(button)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var fittingSize: NSSize { frame.size }
+}
+
+/// Borderless symbol button that works on the first click inside the non-activating panel.
+private final class ControlButton: NSButton {
+    private let onPress: (ItemAction) -> Void
+    private let itemAction: ItemAction
+
+    init(action: ItemAction, symbol: String, tip: String, onPress: @escaping (ItemAction) -> Void) {
+        itemAction = action
+        self.onPress = onPress
+        super.init(frame: .zero)
+        image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
+        imagePosition = .imageOnly
+        imageScaling = .scaleProportionallyUpOrDown
+        isBordered = false
+        contentTintColor = .white
+        toolTip = tip
+        setAccessibilityLabel(tip)
+        target = self
+        self.action = #selector(pressed)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    @objc private func pressed() { onPress(itemAction) }
 }

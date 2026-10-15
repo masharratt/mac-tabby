@@ -6,6 +6,12 @@ import TabbyCore
 final class SwitcherPanel: NSPanel {
     /// Cached thumbnail lookup; must only read memory.
     var imageProvider: ((UInt32) -> CGImage?)?
+    /// Pointer moved onto the item at this index (only after the pointer really moved).
+    var onHover: ((Int) -> Void)?
+    var onClickItem: ((Int) -> Void)?
+    var onAction: ((ItemAction, Int) -> Void)?
+    /// Whether hover controls make sense for a window (needs an AX element). May call AX.
+    var controlsAvailable: ((WindowInfo) -> Bool)?
 
     private let background = NSVisualEffectView()
     private var windows: [WindowInfo] = []
@@ -16,6 +22,11 @@ final class SwitcherPanel: NSPanel {
     private var items: [Int: SwitcherItemView] = [:]
     private var selection = 0
     private var screenSize = CGSize.zero
+    private var hoveredIndex: Int?
+    private var controlsCache: [UInt32: Bool] = [:]
+    /// Pointer position when the panel opened: a panel appearing under a still pointer must not
+    /// select whatever item happens to be there.
+    private var openMouse = CGPoint.zero
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
@@ -48,17 +59,39 @@ final class SwitcherPanel: NSPanel {
         self.windows = windows
         self.selection = selection
         icons = [:]
+        controlsCache = [:]
+        hoveredIndex = nil
+        openMouse = NSEvent.mouseLocation
+        let area = Self.screenUnderMouse().visibleFrame
+        screenSize = area.size
+        relayout(around: area)
+        orderFrontRegardless()
+    }
+
+    /// The list changed in place (a window closed, minimized, ...): redraw and keep the panel
+    /// centred on the same screen.
+    func reload(windows: [WindowInfo], selection: Int) {
+        guard isVisible else { return }
+        self.windows = windows
+        self.selection = selection
+        relayout(around: Self.screen(containing: frame)?.visibleFrame ?? Self.screenUnderMouse().visibleFrame)
+    }
+
+    /// Panel frame in global top-left coordinates (what CGEvent locations use).
+    var globalFrame: CGRect {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return PreviewRules.appKitRect(fromGlobal: frame, primaryScreenHeight: primaryHeight) // the flip is its own inverse
+    }
+
+    private func relayout(around area: NSRect) {
         for w in windows where icons[w.pid] == nil {
             icons[w.pid] = NSRunningApplication(processIdentifier: w.pid)?.icon
         }
-        let area = Self.screenUnderMouse().visibleFrame
-        screenSize = area.size
         let g = makeGrid()
         grid = g
         setFrame(NSRect(x: area.midX - g.panelSize.width / 2, y: area.midY - g.panelSize.height / 2,
                         width: g.panelSize.width, height: g.panelSize.height), display: false)
         rebuildItems()
-        orderFrontRegardless()
     }
 
     func updateSelection(_ selection: Int) {
@@ -68,6 +101,7 @@ final class SwitcherPanel: NSPanel {
         grid = g
         if g.visibleRows == old.visibleRows {
             for (index, view) in items { view.setSelected(index == selection) }
+            refreshControls()
         } else {
             rebuildItems()
         }
@@ -86,6 +120,39 @@ final class SwitcherPanel: NSPanel {
         icons = [:]
         items = [:]
         grid = nil
+        hoveredIndex = nil
+        controlsCache = [:]
+    }
+
+    // MARK: Hover controls
+
+    private func hover(_ index: Int) {
+        guard NSEvent.mouseLocation != openMouse else { return }
+        hoveredIndex = index
+        refreshControls()
+        onHover?(index)
+    }
+
+    /// Controls show on the item that is both hovered and selected, and only when AX can reach it.
+    private func refreshControls() {
+        for (index, view) in items {
+            let wanted = index == hoveredIndex && index == selection && windows.indices.contains(index)
+            view.setControlsVisible(wanted && hasControls(windows[index]))
+        }
+    }
+
+    private func hasControls(_ w: WindowInfo) -> Bool {
+        if let cached = controlsCache[w.id] { return cached }
+        let available = controlsAvailable?(w) ?? false
+        controlsCache[w.id] = available
+        return available
+    }
+
+    /// After a rebuild, find what is under the pointer (only once the pointer has moved).
+    private func indexUnderMouse() -> Int? {
+        guard NSEvent.mouseLocation != openMouse else { return nil }
+        let point = background.convert(mouseLocationOutsideOfEventStream, from: nil)
+        return items.first { $0.value.frame.contains(point) }?.key
     }
 
     private func makeGrid() -> GridLayout {
@@ -103,10 +170,16 @@ final class SwitcherPanel: NSPanel {
             let frame = NSRect(x: origin.x, y: g.panelSize.height - origin.y - g.cellSize.height,
                                width: g.cellSize.width, height: g.cellSize.height)
             let view = makeItem(for: windows[index], frame: frame)
+            view.index = index
+            view.onHover = { [weak self, weak view] in if let view { self?.hover(view.index) } }
+            view.onClick = { [weak self, weak view] in if let view { self?.onClickItem?(view.index) } }
+            view.onAction = { [weak self, weak view] action in if let view { self?.onAction?(action, view.index) } }
             view.setSelected(index == selection)
             background.addSubview(view)
             items[index] = view
         }
+        hoveredIndex = indexUnderMouse()
+        refreshControls()
     }
 
     private func makeItem(for w: WindowInfo, frame: NSRect) -> SwitcherItemView {
@@ -125,6 +198,10 @@ final class SwitcherPanel: NSPanel {
         if w.isMinimized { return "Minimized" }
         if w.isOnOtherDesktop { return "Other desktop" }
         return nil
+    }
+
+    private static func screen(containing rect: NSRect) -> NSScreen? {
+        NSScreen.screens.first { $0.frame.intersects(rect) }
     }
 
     private static func screenUnderMouse() -> NSScreen {

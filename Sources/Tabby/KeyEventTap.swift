@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Session-wide keyboard event tap on its own thread, so a slow main thread never makes macOS
+/// Session-wide keyboard (and mouse-button) event tap on its own thread, so a slow main thread never makes macOS
 /// disable the tap. The callback does no work itself: it forwards to `handler` and swallows the
 /// event when `handler` returns true.
 final class KeyEventTap {
@@ -24,6 +24,10 @@ final class KeyEventTap {
             let mask = (1 << CGEventType.keyDown.rawValue)
                 | (1 << CGEventType.keyUp.rawValue)
                 | (1 << CGEventType.flagsChanged.rawValue)
+                | (1 << CGEventType.leftMouseDown.rawValue)
+                | (1 << CGEventType.leftMouseUp.rawValue)
+                | (1 << CGEventType.rightMouseDown.rawValue)
+                | (1 << CGEventType.rightMouseUp.rawValue)
             guard let p = CGEvent.tapCreate(
                 tap: .cgSessionEventTap,
                 place: .headInsertEventTap,
