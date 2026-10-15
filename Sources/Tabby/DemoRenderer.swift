@@ -92,7 +92,15 @@ enum DemoRenderer {
 
     private static func icon(_ bundleID: String) -> NSImage? {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        // Safari lives in a cryptex on recent macOS; its /Applications stub can render a blank icon.
+        let cryptex = "/System/Cryptexes/App/System/Applications/" + url.lastPathComponent
+        let path = FileManager.default.fileExists(atPath: cryptex) ? cryptex : url.path
+        // Rasterize at a large size up front: Safari's small icon representations can resolve
+        // lazily and draw blank in an offscreen render.
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        var rect = CGRect(x: 0, y: 0, width: 256, height: 256)
+        guard let cg = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return icon }
+        return NSImage(cgImage: cg, size: NSSize(width: 128, height: 128))
     }
 
     // MARK: Synthetic thumbnails

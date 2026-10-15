@@ -131,6 +131,7 @@ final class TileItemView: SwitcherItemView {
     private let label: NSTextField
     private let thumbView = NSImageView()
     private let iconView = NSImageView()
+    private let titleIconView = NSImageView()
     private let markerLabel: NSTextField?
     private let showsThumbnails: Bool
     private var pictureFrame = NSRect.zero
@@ -193,6 +194,21 @@ final class TileItemView: SwitcherItemView {
             label.cell?.truncatesLastVisibleLine = true
         }
         label.frame = NSRect(x: inset, y: 8, width: frame.width - 2 * inset, height: labelH)
+        if layout == .thumbnails, icon != nil {
+            // Small app icon beside the title; icon + text stay centred as a group and the text truncates first.
+            let iconSide: CGFloat = 17, gap: CGFloat = 5
+            let h = label.intrinsicContentSize.height
+            let textW = min(label.intrinsicContentSize.width.rounded(.up) + 2, frame.width - 2 * inset - iconSide - gap)
+            let groupW = iconSide + gap + textW
+            let x0 = ((frame.width - groupW) / 2).rounded()
+            let midY = 8 + labelH / 2
+            titleIconView.frame = NSRect(x: x0, y: midY - iconSide / 2, width: iconSide, height: iconSide)
+            titleIconView.image = icon
+            titleIconView.imageScaling = .scaleProportionallyUpOrDown
+            addSubview(titleIconView)
+            label.alignment = .left
+            label.frame = NSRect(x: x0 + iconSide + gap, y: midY - h / 2, width: textW, height: h)
+        }
         addSubview(label)
 
         if layout == .thumbnails { setThumbnail(thumbnail) } else { thumbView.isHidden = true }
