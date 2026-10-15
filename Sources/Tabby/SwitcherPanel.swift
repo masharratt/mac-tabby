@@ -18,6 +18,7 @@ final class SwitcherPanel: NSPanel {
     private var icons: [pid_t: NSImage] = [:]
     private var layout = Layout.thumbnails
     private var thumbnailSize = ThumbnailSize.medium
+    private var showWindowTitles = true
     private var grid: GridLayout?
     private var items: [Int: SwitcherItemView] = [:]
     private var selection = 0
@@ -53,6 +54,7 @@ final class SwitcherPanel: NSPanel {
     func apply(_ settings: Settings) {
         layout = settings.layout
         thumbnailSize = settings.thumbnailSize
+        showWindowTitles = settings.showWindowTitles
     }
 
     func show(windows: [WindowInfo], selection: Int) {
@@ -157,7 +159,7 @@ final class SwitcherPanel: NSPanel {
 
     private func makeGrid() -> GridLayout {
         PanelGeometry.grid(count: windows.count, selected: selection, layout: layout,
-                           thumbnailSize: thumbnailSize, screen: screenSize)
+                           thumbnailSize: thumbnailSize, screen: screenSize, showWindowTitles: showWindowTitles)
     }
 
     private func rebuildItems() {
@@ -189,7 +191,7 @@ final class SwitcherPanel: NSPanel {
             return RowItemView(frame: frame, window: w, marker: Self.marker(for: w), icon: icon)
         case .appIcons, .thumbnails:
             return TileItemView(frame: frame, window: w, layout: layout, thumbnailSize: thumbnailSize,
-                                marker: Self.marker(for: w), icon: icon, thumbnail: imageProvider?(w.id))
+                                showWindowTitles: showWindowTitles, marker: Self.marker(for: w), icon: icon, thumbnail: imageProvider?(w.id))
         }
     }
 

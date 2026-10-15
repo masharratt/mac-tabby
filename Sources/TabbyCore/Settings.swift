@@ -24,6 +24,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var livePreview = true
     public var thumbnailSize: ThumbnailSize = .medium
     public var showHiddenApps = true
+    /// App Icons layout: show the window title under each icon instead of only the app name.
+    public var showWindowTitles = true
 
     public init() {}
 
@@ -39,6 +41,7 @@ public struct Settings: Codable, Equatable, Sendable {
         livePreview = try c.decodeIfPresent(Bool.self, forKey: .livePreview) ?? d.livePreview
         thumbnailSize = (try? c.decodeIfPresent(ThumbnailSize.self, forKey: .thumbnailSize)) ?? d.thumbnailSize
         showHiddenApps = try c.decodeIfPresent(Bool.self, forKey: .showHiddenApps) ?? d.showHiddenApps
+        showWindowTitles = try c.decodeIfPresent(Bool.self, forKey: .showWindowTitles) ?? d.showWindowTitles
     }
 
     /// Adds a bundle id or app name to the hidden list; blank and duplicate (case-insensitive) entries are ignored.

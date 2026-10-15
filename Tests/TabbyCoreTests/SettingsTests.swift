@@ -119,6 +119,21 @@ import Testing
         #expect(s.thumbnailSize == .medium)
     }
 
+    @Test func showWindowTitlesDefaultsOnAndOldDataDecodes() throws {
+        #expect(Settings().showWindowTitles)
+        let old = #"{"layout":"appIcons","showDelayMilliseconds":150,"hiddenApps":["Mail"]}"#
+        let s = try JSONDecoder().decode(Settings.self, from: Data(old.utf8))
+        #expect(s.showWindowTitles)
+        #expect(s.layout == .appIcons && s.hiddenApps == ["Mail"])
+    }
+
+    @Test func showWindowTitlesRoundTripsWhenOff() throws {
+        var s = Settings()
+        s.showWindowTitles = false
+        let back = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(s))
+        #expect(back.showWindowTitles == false && back == s)
+    }
+
     @Test func hideAppAddsOnceCaseInsensitively() {
         var s = Settings()
         s.hideApp("com.apple.Safari")

@@ -119,14 +119,17 @@ final class TileItemView: SwitcherItemView {
     private let markerLabel: NSTextField?
     private let showsThumbnails: Bool
 
-    init(frame: NSRect, window: WindowInfo, layout: Layout, thumbnailSize: ThumbnailSize,
+    init(frame: NSRect, window: WindowInfo, layout: Layout, thumbnailSize: ThumbnailSize, showWindowTitles: Bool,
          marker: String?, icon: NSImage?, thumbnail: CGImage?) {
         showsThumbnails = layout == .thumbnails
-        label = NSTextField(labelWithString: layout == .thumbnails ? window.displayTitle : window.appName)
+        let iconTitles = layout == .appIcons && showWindowTitles
+        let text = layout == .thumbnails ? window.displayTitle
+            : (iconTitles && !window.title.isEmpty ? window.title : window.appName)
+        label = NSTextField(labelWithString: text)
         markerLabel = marker.map { NSTextField(labelWithString: $0) }
         super.init(frame: frame, windowID: window.id)
 
-        let labelH: CGFloat = 18
+        let labelH: CGFloat = iconTitles ? 34 : 18   // two lines when showing window titles
         let inset: CGFloat = 8
         let picture: NSRect
         if layout == .thumbnails {
@@ -165,6 +168,11 @@ final class TileItemView: SwitcherItemView {
         label.font = .systemFont(ofSize: 12)
         label.alignment = .center
         label.lineBreakMode = .byTruncatingTail
+        if iconTitles {
+            label.maximumNumberOfLines = 2
+            label.cell?.wraps = true
+            label.cell?.truncatesLastVisibleLine = true
+        }
         label.frame = NSRect(x: inset, y: 8, width: frame.width - 2 * inset, height: labelH)
         addSubview(label)
 

@@ -49,19 +49,22 @@ public enum PanelGeometry {
     public static let titlesMaxWidth: CGFloat = 640
     static let titleRowHeight: CGFloat = 32
     static let iconCell = CGSize(width: 112, height: 112)
+    /// App Icons with window titles: wider for the text, taller for a second title line.
+    static let iconCellWithTitles = CGSize(width: 140, height: 132)
     static let thumbInset: CGFloat = 8
     static let thumbLabelHeight: CGFloat = 26
 
     static func padding(_ layout: Layout) -> CGFloat { 12 }
     static func spacing(_ layout: Layout) -> CGFloat { layout == .titles ? 2 : 10 }
 
-    public static func cellSize(layout: Layout, thumbnailSize: ThumbnailSize, screenWidth: CGFloat) -> CGSize {
+    public static func cellSize(layout: Layout, thumbnailSize: ThumbnailSize, screenWidth: CGFloat,
+                                showWindowTitles: Bool = true) -> CGSize {
         switch layout {
         case .titles:
             let width = min(titlesMaxWidth, screenWidth * screenFraction) - 2 * padding(layout)
             return CGSize(width: max(width, 1), height: titleRowHeight)
         case .appIcons:
-            return iconCell
+            return showWindowTitles ? iconCellWithTitles : iconCell
         case .thumbnails:
             let b = thumbnailSize.box
             return CGSize(width: b.width + 2 * thumbInset, height: b.height + 2 * thumbInset + thumbLabelHeight)
@@ -69,22 +72,26 @@ public enum PanelGeometry {
     }
 
     /// Most columns that fit in 90% of the screen width (at least 1; always 1 for titles).
-    public static func maxColumns(layout: Layout, thumbnailSize: ThumbnailSize, screenWidth: CGFloat) -> Int {
+    public static func maxColumns(layout: Layout, thumbnailSize: ThumbnailSize, screenWidth: CGFloat,
+                                  showWindowTitles: Bool = true) -> Int {
         if layout == .titles { return 1 }
-        let cell = cellSize(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screenWidth)
+        let cell = cellSize(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screenWidth,
+                            showWindowTitles: showWindowTitles)
         let room = screenWidth * screenFraction - 2 * padding(layout)
         return max(1, Int(((room + spacing(layout)) / (cell.width + spacing(layout))).rounded(.down)))
     }
 
     public static func grid(count: Int, selected: Int, layout: Layout, thumbnailSize: ThumbnailSize,
-                            screen: CGSize) -> GridLayout {
+                            screen: CGSize, showWindowTitles: Bool = true) -> GridLayout {
         let pad = padding(layout), gap = spacing(layout)
-        let cell = cellSize(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screen.width)
+        let cell = cellSize(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screen.width,
+                            showWindowTitles: showWindowTitles)
         guard count > 0 else {
             return GridLayout(columns: 0, totalRows: 0, visibleRows: 0..<0, cellSize: cell, spacing: gap,
                               padding: pad, panelSize: .zero, itemRange: 0..<0)
         }
-        let maxCols = maxColumns(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screen.width)
+        let maxCols = maxColumns(layout: layout, thumbnailSize: thumbnailSize, screenWidth: screen.width,
+                               showWindowTitles: showWindowTitles)
         let rows = (count + maxCols - 1) / maxCols
         let columns = (count + rows - 1) / rows   // balanced: 10 items, 8 max -> 2 rows of 5
         let roomH = screen.height * screenFraction - 2 * pad

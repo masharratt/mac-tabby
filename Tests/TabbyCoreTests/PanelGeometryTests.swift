@@ -95,6 +95,35 @@ import Testing
         #expect(PanelGeometry.fit(.zero, in: box) == box)
     }
 
+    @Test func iconTitlesMakeTheTileWiderAndTaller() {
+        let on = PanelGeometry.cellSize(layout: .appIcons, thumbnailSize: .medium, screenWidth: 1920, showWindowTitles: true)
+        let off = PanelGeometry.cellSize(layout: .appIcons, thumbnailSize: .medium, screenWidth: 1920, showWindowTitles: false)
+        #expect(on.width > off.width && on.height > off.height, "on=\(on) off=\(off)")
+    }
+
+    @Test func iconTitlesSettingDoesNotChangeOtherLayouts() {
+        for layout in [Layout.titles, .thumbnails] {
+            let on = PanelGeometry.cellSize(layout: layout, thumbnailSize: .medium, screenWidth: 1920, showWindowTitles: true)
+            let off = PanelGeometry.cellSize(layout: layout, thumbnailSize: .medium, screenWidth: 1920, showWindowTitles: false)
+            #expect(on == off, "layout=\(layout)")
+        }
+    }
+
+    @Test func iconTitlesGridUsesTheTallerCell() {
+        func g(_ titles: Bool) -> GridLayout {
+            PanelGeometry.grid(count: 3, selected: 0, layout: .appIcons, thumbnailSize: .medium, screen: screen, showWindowTitles: titles)
+        }
+        #expect(g(true).cellSize.height > g(false).cellSize.height)
+        #expect(g(true).panelSize.height > g(false).panelSize.height)
+        #expect(g(true).panelSize.width > g(false).panelSize.width)
+    }
+
+    @Test func iconTitlesFewerColumnsFitOnANarrowScreen() {
+        let on = PanelGeometry.maxColumns(layout: .appIcons, thumbnailSize: .medium, screenWidth: 1000, showWindowTitles: true)
+        let off = PanelGeometry.maxColumns(layout: .appIcons, thumbnailSize: .medium, screenWidth: 1000, showWindowTitles: false)
+        #expect(on < off, "on=\(on) off=\(off)")
+    }
+
     @Test func capturePixelSizeScalesTheBox() {
         let px = ThumbnailSize.medium.capturePixels(scale: 2)
         #expect(px.width == ThumbnailSize.medium.box.width * 2)

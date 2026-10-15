@@ -85,6 +85,9 @@ private struct SettingsView: View {
                 }
                 .disabled(model.settings.layout != .thumbnails)
                 .help("Used by the Thumbnails layout. Thumbnails need Screen Recording permission.")
+                Toggle("Show window titles", isOn: $model.settings.showWindowTitles)
+                    .disabled(model.settings.layout != .appIcons)
+                    .help("Used by the App Icons layout: shows the window title under each icon.")
                 Toggle("Live preview of the selected window", isOn: $model.settings.livePreview)
                     .help("Takes effect when live preview arrives.")
             }

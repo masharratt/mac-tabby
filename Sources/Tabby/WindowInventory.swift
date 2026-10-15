@@ -183,15 +183,20 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
         return again
     }
 
+    // Sync helper: NSLock must not be taken directly from async code.
+    private func setHandles(_ handles: [UInt32: SCWindow]) {
+        lock.lock()
+        scWindows = handles
+        lock.unlock()
+    }
+
     private func fetch() async -> [WindowInfo] {
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
             // cfn: no Screen Recording permission means current-Space windows only; re-tried each refresh.
             return fallback.currentWindows()
         }
         let handles = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { a, _ in a })
-        lock.lock()
-        scWindows = handles
-        lock.unlock()
+        setHandles(handles)
         var policy: [pid_t: NSRunningApplication?] = [:]
         var records: [WindowRecord] = []
         let spaces = PrivateAPI.spaceCounts(for: content.windows.filter { !$0.isOnScreen }.map(\.windowID))
