@@ -1,6 +1,6 @@
 # State Machines
 
-**Last Updated:** 2026-10-15 (stage 2B: settings entity added)
+**Last Updated:** 2026-10-15 (stage 3A: thumbnail entry entity added)
 
 ## 1. Switcher
 
@@ -130,4 +130,41 @@ stateDiagram-v2
 stateDiagram-v2
   Loaded --> Edited: control changed
   Edited --> Loaded: saved and applied live
+```
+
+## 5. Thumbnail Entry
+
+**Source:** Sources/TabbyCore/ThumbnailCache.swift, Sources/Tabby/ThumbnailStore.swift
+
+### States
+
+| State | Meaning |
+|-------|---------|
+| Absent | No cached image for the window; the panel shows the app icon. |
+| Untrusted | Image captured while the window went off-screen; shown, but any trusted capture replaces it. |
+| Trusted | Image captured while the window stayed on-screen. Never replaced by an untrusted capture. |
+
+### Transitions
+
+| From | To | Trigger | Guard |
+|------|----|---------|-------|
+| Absent | Trusted | Capture lands | Window on-screen before and after; fits the 64 MB budget |
+| Absent | Untrusted | Capture lands | Window off-screen after capture; fits the budget |
+| Untrusted | Trusted | Capture lands | On-screen before and after |
+| Trusted | Trusted | Capture lands | On-screen before and after |
+| Trusted | Trusted | Untrusted capture lands | Rejected, old image kept |
+| Trusted | Absent | Least recently used and budget exceeded | Another image needs the room |
+| Untrusted | Absent | Least recently used and budget exceeded | Another image needs the room |
+| Trusted | Absent | Window closes | Inventory refresh no longer lists it |
+| Untrusted | Absent | Window closes | Inventory refresh no longer lists it |
+
+### Diagram
+
+```mermaid
+stateDiagram-v2
+  Absent --> Trusted: on-screen capture
+  Absent --> Untrusted: off-screen capture
+  Untrusted --> Trusted: on-screen capture
+  Trusted --> Absent: evicted or closed
+  Untrusted --> Absent: evicted or closed
 ```

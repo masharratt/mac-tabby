@@ -1,12 +1,13 @@
 import Foundation
 
-/// How the switcher draws its windows. P1 ships only `.titles`; P3 adds app icons and thumbnails.
-public enum Layout: String, Codable, Sendable {
+/// How the switcher draws its windows. Every consumer switch must handle all cases.
+public enum Layout: String, Codable, CaseIterable, Sendable {
     case titles
-    // cfn: P3 adds `appIcons` and `thumbnails`; every consumer switch must then handle them.
+    case appIcons
+    case thumbnails
 }
 
-/// Thumbnail size for the thumbnails layout (stage 3). Stored now, unused until then.
+/// Thumbnail size for the thumbnails layout.
 public enum ThumbnailSize: String, Codable, CaseIterable, Sendable {
     case small, medium, large
 }
@@ -14,7 +15,8 @@ public enum ThumbnailSize: String, Codable, CaseIterable, Sendable {
 public struct Settings: Codable, Equatable, Sendable {
     public static let maxShowDelayMilliseconds = 1000
 
-    public var layout: Layout = .titles
+    /// Fresh installs get thumbnails; a saved layout always wins over this default.
+    public var layout: Layout = .thumbnails
     public var showDelayMilliseconds = 100 { didSet { showDelayMilliseconds = Self.clamp(showDelayMilliseconds) } }
     public var hiddenApps: [String] = []
     public var showMinimized = true

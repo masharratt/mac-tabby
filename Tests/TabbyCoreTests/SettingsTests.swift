@@ -5,7 +5,7 @@ import Testing
 @Suite struct SettingsTests {
     @Test func defaults() {
         let s = Settings()
-        #expect(s.layout == .titles)
+        #expect(s.layout == .thumbnails)
         #expect(s.showDelayMilliseconds == 100)
         #expect(s.hiddenApps.isEmpty)
         #expect(s.showMinimized)
@@ -33,9 +33,36 @@ import Testing
         #expect(s.showDelayMilliseconds == 100)
     }
 
-    @Test func unknownLayoutFallsBackToTitles() throws {
+    @Test func unknownLayoutFallsBackToDefault() throws {
         let s = try JSONDecoder().decode(Settings.self, from: Data(#"{"layout":"hologram"}"#.utf8))
+        #expect(s.layout == Settings().layout)
+    }
+
+    // MARK: stage 3A
+
+    @Test func freshInstallDefaultsToThumbnails() {
+        #expect(Settings().layout == .thumbnails)
+    }
+
+    @Test func savedTitlesLayoutIsKept() throws {
+        // A user who chose Titles before thumbnails existed must not be switched.
+        let s = try JSONDecoder().decode(Settings.self, from: Data(#"{"layout":"titles"}"#.utf8))
         #expect(s.layout == .titles)
+    }
+
+    @Test func newLayoutsRoundTrip() throws {
+        for l in [Layout.titles, .appIcons, .thumbnails] {
+            var s = Settings()
+            s.layout = l
+            let back = try JSONDecoder().decode(Settings.self, from: JSONEncoder().encode(s))
+            #expect(back.layout == l)
+        }
+        let icons = try JSONDecoder().decode(Settings.self, from: Data(#"{"layout":"appIcons"}"#.utf8))
+        #expect(icons.layout == .appIcons)
+    }
+
+    @Test func layoutCasesAreComplete() {
+        #expect(Set(Layout.allCases) == [.titles, .appIcons, .thumbnails])
     }
 
     @Test func showDelayIsClamped() throws {

@@ -1,16 +1,21 @@
 import AppKit
 import TabbyCore
 
-/// The Titles-list switcher panel. Non-activating so it never steals focus from the current app.
-/// P3 adds thumbnail and app-icon layouts behind the same show/update/hide surface.
+/// The switcher panel. Non-activating so it never steals focus from the current app.
+/// Layout math lives in TabbyCore (`PanelGeometry`); this class only places views.
 final class SwitcherPanel: NSPanel {
-    private static let rowHeight: CGFloat = 32
-    private static let padding: CGFloat = 10
-    private static let maxWidth: CGFloat = 640
+    /// Cached thumbnail lookup; must only read memory.
+    var imageProvider: ((UInt32) -> CGImage?)?
 
     private let background = NSVisualEffectView()
     private var windows: [WindowInfo] = []
     private var icons: [pid_t: NSImage] = [:]
+    private var layout = Layout.thumbnails
+    private var thumbnailSize = ThumbnailSize.medium
+    private var grid: GridLayout?
+    private var items: [Int: SwitcherItemView] = [:]
+    private var selection = 0
+    private var screenSize = CGSize.zero
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
@@ -25,7 +30,7 @@ final class SwitcherPanel: NSPanel {
         background.blendingMode = .behindWindow
         background.state = .active
         background.wantsLayer = true
-        background.layer?.cornerRadius = 14
+        background.layer?.cornerRadius = 16
         background.layer?.masksToBounds = true
         contentView = background
     }
@@ -33,34 +38,45 @@ final class SwitcherPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
+    /// Takes effect the next time the panel opens.
+    func apply(_ settings: Settings) {
+        layout = settings.layout
+        thumbnailSize = settings.thumbnailSize
+    }
+
     func show(windows: [WindowInfo], selection: Int) {
         self.windows = windows
+        self.selection = selection
         icons = [:]
         for w in windows where icons[w.pid] == nil {
             icons[w.pid] = NSRunningApplication(processIdentifier: w.pid)?.icon
         }
-        let screen = Self.screenUnderMouse()
-        let area = screen.visibleFrame
-        let capacity = max(1, Int((area.height * 0.9 - Self.padding * 2) / Self.rowHeight))
-        let rows = min(windows.count, capacity)
-        let size = NSSize(
-            width: min(Self.maxWidth, area.width * 0.9),
-            height: CGFloat(rows) * Self.rowHeight + Self.padding * 2
-        )
-        setFrame(NSRect(
-            x: area.midX - size.width / 2,
-            y: area.midY - size.height / 2,
-            width: size.width,
-            height: size.height
-        ), display: false)
-        rebuildRows(selection: selection, capacity: capacity)
+        let area = Self.screenUnderMouse().visibleFrame
+        screenSize = area.size
+        let g = makeGrid()
+        grid = g
+        setFrame(NSRect(x: area.midX - g.panelSize.width / 2, y: area.midY - g.panelSize.height / 2,
+                        width: g.panelSize.width, height: g.panelSize.height), display: false)
+        rebuildItems()
         orderFrontRegardless()
     }
 
     func updateSelection(_ selection: Int) {
-        guard isVisible else { return }
-        let capacity = max(1, Int((frame.height - Self.padding * 2) / Self.rowHeight))
-        rebuildRows(selection: selection, capacity: capacity)
+        guard isVisible, let old = grid else { return }
+        self.selection = selection
+        let g = makeGrid()
+        grid = g
+        if g.visibleRows == old.visibleRows {
+            for (index, view) in items { view.setSelected(index == selection) }
+        } else {
+            rebuildItems()
+        }
+    }
+
+    /// A new thumbnail landed in the cache: swap it into its tile.
+    func thumbnailUpdated(_ id: UInt32) {
+        guard isVisible, layout == .thumbnails else { return }
+        for view in items.values where view.windowID == id { view.setThumbnail(imageProvider?(id)) }
     }
 
     func hide() {
@@ -68,25 +84,43 @@ final class SwitcherPanel: NSPanel {
         background.subviews.forEach { $0.removeFromSuperview() }
         windows = []
         icons = [:]
+        items = [:]
+        grid = nil
     }
 
-    private func rebuildRows(selection: Int, capacity: Int) {
+    private func makeGrid() -> GridLayout {
+        PanelGeometry.grid(count: windows.count, selected: selection, layout: layout,
+                           thumbnailSize: thumbnailSize, screen: screenSize)
+    }
+
+    private func rebuildItems() {
         background.subviews.forEach { $0.removeFromSuperview() }
-        let range = SelectionIndex.visibleRange(count: windows.count, selected: selection, capacity: capacity)
-        for (slot, index) in range.enumerated() {
-            let y = frame.height - Self.padding - CGFloat(slot + 1) * Self.rowHeight
-            let row = RowView(
-                frame: NSRect(x: Self.padding, y: y, width: frame.width - Self.padding * 2, height: Self.rowHeight),
-                title: windows[index].displayTitle,
-                marker: Self.marker(for: windows[index]),
-                icon: icons[windows[index].pid],
-                selected: index == selection
-            )
-            background.addSubview(row)
+        items = [:]
+        guard let g = grid else { return }
+        for index in g.itemRange {
+            guard let slot = g.slot(of: index) else { continue }
+            let origin = g.origin(row: slot.row, column: slot.column)
+            let frame = NSRect(x: origin.x, y: g.panelSize.height - origin.y - g.cellSize.height,
+                               width: g.cellSize.width, height: g.cellSize.height)
+            let view = makeItem(for: windows[index], frame: frame)
+            view.setSelected(index == selection)
+            background.addSubview(view)
+            items[index] = view
         }
     }
 
-    /// Small right-aligned tag: minimized wins over other desktop (a minimized window has no desktop).
+    private func makeItem(for w: WindowInfo, frame: NSRect) -> SwitcherItemView {
+        let icon = icons[w.pid]
+        switch layout {
+        case .titles:
+            return RowItemView(frame: frame, window: w, marker: Self.marker(for: w), icon: icon)
+        case .appIcons, .thumbnails:
+            return TileItemView(frame: frame, window: w, layout: layout, thumbnailSize: thumbnailSize,
+                                marker: Self.marker(for: w), icon: icon, thumbnail: imageProvider?(w.id))
+        }
+    }
+
+    /// Small tag: minimized wins over other desktop (a minimized window has no desktop).
     private static func marker(for w: WindowInfo) -> String? {
         if w.isMinimized { return "Minimized" }
         if w.isOnOtherDesktop { return "Other desktop" }
@@ -97,38 +131,4 @@ final class SwitcherPanel: NSPanel {
         let mouse = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
     }
-}
-
-private final class RowView: NSView {
-    init(frame: NSRect, title: String, marker: String?, icon: NSImage?, selected: Bool) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.cornerRadius = 8
-        if selected { layer?.backgroundColor = NSColor.selectedContentBackgroundColor.cgColor }
-
-        let iconView = NSImageView(frame: NSRect(x: 8, y: (frame.height - 22) / 2, width: 22, height: 22))
-        iconView.image = icon
-        addSubview(iconView)
-
-        let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 14)
-        label.textColor = selected ? .alternateSelectedControlTextColor : .labelColor
-        label.lineBreakMode = .byTruncatingTail
-        let h = label.intrinsicContentSize.height
-        var labelWidth = frame.width - 46
-        if let marker {
-            let tag = NSTextField(labelWithString: marker)
-            tag.font = .systemFont(ofSize: 11)
-            tag.textColor = selected ? .alternateSelectedControlTextColor : .secondaryLabelColor
-            let size = tag.intrinsicContentSize
-            tag.frame = NSRect(x: frame.width - 8 - size.width, y: (frame.height - size.height) / 2,
-                               width: size.width, height: size.height)
-            addSubview(tag)
-            labelWidth -= size.width + 8
-        }
-        label.frame = NSRect(x: 38, y: (frame.height - h) / 2, width: labelWidth, height: h)
-        addSubview(label)
-    }
-
-    required init?(coder: NSCoder) { fatalError("not used") }
 }

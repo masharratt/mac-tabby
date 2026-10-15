@@ -3,8 +3,9 @@ import ServiceManagement
 import SwiftUI
 import TabbyCore
 
-// SwiftUI also exports a `Settings` type; pin ours.
+// SwiftUI also exports `Settings` and `Layout` types; pin ours.
 typealias Settings = TabbyCore.Settings
+typealias Layout = TabbyCore.Layout
 
 /// Holds the live settings. Every change is saved and pushed to `onChange` so the switcher
 /// picks it up without a relaunch.
@@ -19,6 +20,16 @@ final class SettingsModel: ObservableObject {
     var onChange: ((Settings) -> Void)?
 
     init(settings: Settings) { self.settings = settings }
+}
+
+private extension Layout {
+    var displayName: String {
+        switch self {
+        case .titles: "Titles"
+        case .appIcons: "App Icons"
+        case .thumbnails: "Thumbnails"
+        }
+    }
 }
 
 /// Launch-at-login via SMAppService. Only offered from /Applications, because a registration
@@ -67,16 +78,13 @@ private struct SettingsView: View {
         Form {
             Section("Layout") {
                 Picker("Switcher layout", selection: $model.settings.layout) {
-                    Text("Titles").tag(Layout.titles)
+                    ForEach(Layout.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
-                // cfn: Thumbnails and App Icons are listed as text, not picker rows, because the
-                // Layout enum has no such cases until stage 3; add them to the picker then.
-                Text("Thumbnails and App Icons: coming soon")
-                    .font(.callout).foregroundStyle(.secondary)
                 Picker("Thumbnail size", selection: $model.settings.thumbnailSize) {
                     ForEach(ThumbnailSize.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                 }
-                .help("Used by the thumbnails layout, coming soon.")
+                .disabled(model.settings.layout != .thumbnails)
+                .help("Used by the Thumbnails layout. Thumbnails need Screen Recording permission.")
                 Toggle("Live preview of the selected window", isOn: $model.settings.livePreview)
                     .help("Takes effect when live preview arrives.")
             }

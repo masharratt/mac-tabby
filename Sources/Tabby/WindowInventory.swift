@@ -14,6 +14,12 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
     private var windows: [WindowInfo] = []
     private var mru = MRUOrder()
     private var settings: Settings
+    private var scWindows: [UInt32: SCWindow] = [:]
+    private var lastFocused: UInt32?
+    /// Called on the main queue with the ids of all current windows after each refresh.
+    var onWindowsChanged: ((Set<UInt32>) -> Void)?
+    /// Called on the main queue with the window that just lost focus (it may still be visible).
+    var onFocusLost: ((UInt32) -> Void)?
     private var refreshing = false
     private var refreshAgain = false
     private var debounce: DispatchWorkItem?
@@ -31,6 +37,13 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return mru.ordered(WindowInventoryRules.visible(windows, settings: settings))
+    }
+
+    /// Latest ScreenCaptureKit handle for a window id, for thumbnail capture.
+    func scWindow(id: UInt32) -> SCWindow? {
+        lock.lock()
+        defer { lock.unlock() }
+        return scWindows[id]
     }
 
     func apply(_ settings: Settings) {
@@ -66,7 +79,12 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
     func noteFocused(_ id: UInt32) {
         lock.lock()
         mru.focused(id)
+        let previous = lastFocused
+        lastFocused = id
         lock.unlock()
+        if let previous, previous != id {
+            DispatchQueue.main.async { [self] in onFocusLost?(previous) }
+        }
         requestRefresh()
     }
 
@@ -156,7 +174,9 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         windows = list
-        mru.prune(keeping: Set(list.map(\.id)))
+        let ids = Set(list.map(\.id))
+        mru.prune(keeping: ids)
+        DispatchQueue.main.async { [self] in onWindowsChanged?(ids) }
         refreshing = false
         let again = refreshAgain
         refreshAgain = false
@@ -168,6 +188,10 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
             // cfn: no Screen Recording permission means current-Space windows only; re-tried each refresh.
             return fallback.currentWindows()
         }
+        let handles = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { a, _ in a })
+        lock.lock()
+        scWindows = handles
+        lock.unlock()
         var policy: [pid_t: NSRunningApplication?] = [:]
         var records: [WindowRecord] = []
         let spaces = PrivateAPI.spaceCounts(for: content.windows.filter { !$0.isOnScreen }.map(\.windowID))

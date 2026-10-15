@@ -35,7 +35,7 @@ final class OnboardingWindowController: NSWindowController {
     )
     private let screenRow = PermissionRow(
         title: "Screen Recording",
-        detail: "Needed for window thumbnails. Not used yet in this version.",
+        detail: "Needed for window thumbnails. Without it Tabby shows app icons instead.",
         action: Permissions.requestScreenRecording
     )
 

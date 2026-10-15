@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var settingsWindow = SettingsWindowController(model: settingsModel)
     private let tap = KeyEventTap()
     private let panel = SwitcherPanel()
+    private let thumbnails = ThumbnailStore()
     private let onboarding = OnboardingWindowController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -22,9 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         PrivateAPI.resolve()
         buildMenu()
         wireEngine()
-        settingsModel.onChange = { [inventory, engine] s in
+        wireThumbnails()
+        settingsModel.onChange = { [inventory, engine, panel, thumbnails] s in
             inventory.apply(s)
             engine.apply(s)
+            panel.apply(s)
+            thumbnails.apply(s)
         }
         WindowFocuser.onFocused = { [inventory] id in inventory.noteFocused(id) }
         inventory.start()
@@ -47,9 +51,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         engine.onEffect = { [weak self] effect, windows in self?.handle(effect, windows) }
     }
 
+    private func wireThumbnails() {
+        let s = settingsModel.settings
+        panel.apply(s)
+        thumbnails.apply(s)
+        panel.imageProvider = { [thumbnails] in thumbnails.image(for: $0) }
+        thumbnails.windowLookup = { [inventory] in inventory.scWindow(id: $0) }
+        thumbnails.onCaptured = { [panel] in panel.thumbnailUpdated($0) }
+        inventory.onFocusLost = { [thumbnails] in thumbnails.captureAfterFocusLoss($0) }
+        inventory.onWindowsChanged = { [thumbnails] in thumbnails.prune(keeping: $0) }
+    }
+
     private func handle(_ effect: SwitcherEffect, _ windows: [WindowInfo]) {
         switch effect {
-        case let .show(selection): panel.show(windows: windows, selection: selection)
+        case let .show(selection):
+            // Cached images first; captures start after the panel is up and swap in as they land.
+            panel.show(windows: windows, selection: selection)
+            thumbnails.refreshOnScreen(windows)
         case let .selectionChanged(selection): panel.updateSelection(selection)
         case let .commit(index):
             stopTicking()
