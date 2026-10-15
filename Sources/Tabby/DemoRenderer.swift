@@ -73,11 +73,12 @@ enum DemoRenderer {
                 info.isMinimized = index == minimizedIndex
                 info.isOnOtherDesktop = index == otherDesktopIndex
                 let marker = info.isMinimized ? "Minimized" : (info.isOnOtherDesktop ? "Other desktop" : nil)
-                let thumb = layout == .thumbnails ? thumbnail(fake, size: ThumbnailSize.medium.box, dark: dark) : nil
+                let thumb = layout == .thumbnails ? thumbnail(fake, size: ThumbnailSize.medium.box, dark: dark, dots: index != selected) : nil
                 let view = TileItemView(frame: frame, window: info, layout: layout, thumbnailSize: .medium,
                                         showWindowTitles: true, marker: marker, icon: icon(fake.bundleID), thumbnail: thumb)
                 view.setSelected(index == selected)
                 panel.addSubview(view)
+                if index == selected { view.setControlsVisible(true, forceGlyphs: true) }
             }
 
             rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
@@ -97,7 +98,7 @@ enum DemoRenderer {
     // MARK: Synthetic thumbnails
 
     /// A made-up window: title bar with traffic lights and a few coloured blocks. Rendered at 2x.
-    private static func thumbnail(_ fake: Fake, size: CGSize, dark: Bool) -> CGImage? {
+    private static func thumbnail(_ fake: Fake, size: CGSize, dark: Bool, dots: Bool = true) -> CGImage? {
         let scale: CGFloat = 2
         let w = Int(size.width * scale), h = Int(size.height * scale)
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -124,7 +125,8 @@ enum DemoRenderer {
         ctx.setFillColor(body); ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
         let barH: CGFloat = 20
         ctx.setFillColor(bar); ctx.fill(CGRect(x: 0, y: H - barH, width: W, height: barH))
-        for (i, c) in [NSColor.systemRed, .systemYellow, .systemGreen].enumerated() {
+        // The selected tile shows the real hover controls in the same spot instead.
+        for (i, c) in (dots ? [NSColor.systemRed, .systemYellow, .systemGreen] : []).enumerated() {
             ctx.setFillColor(c.cgColor)
             ctx.fillEllipse(in: CGRect(x: 8 + CGFloat(i) * 12, y: H - barH / 2 - 4, width: 8, height: 8))
         }
