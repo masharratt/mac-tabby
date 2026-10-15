@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds a release binary and wraps it in build/Tabby.app, signed with the local "Flameshot Local"
-# identity. Fails if that identity is missing: an ad-hoc signature changes on every build and
+# Builds a release binary and wraps it in build/Tabby.app, signed with a local code-signing
+# identity ($TABBY_SIGN_IDENTITY, default "Flameshot Local"). Fails if it is missing: an ad-hoc signature changes on every build and
 # would silently invalidate the Accessibility / Screen Recording grants.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 APP="build/Tabby.app"
-IDENTITY="Flameshot Local"
+IDENTITY="${TABBY_SIGN_IDENTITY:-Flameshot Local}"
 
 if ! security find-identity -p codesigning | grep -q "\"$IDENTITY\""; then
     echo "error: code signing identity \"$IDENTITY\" not found in the keychain." >&2
