@@ -175,7 +175,6 @@ final class WindowInventory: WindowSource, @unchecked Sendable {
         defer { lock.unlock() }
         windows = list
         let ids = Set(list.map(\.id))
-        mru.prune(keeping: ids)
         DispatchQueue.main.async { [self] in onWindowsChanged?(ids) }
         refreshing = false
         let again = refreshAgain

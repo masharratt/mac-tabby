@@ -1,6 +1,7 @@
 /// Most-recently-used ordering of window ids. Pure: the app feeds it focus changes.
 public struct MRUOrder: Sendable, Equatable {
-    /// Upper bound on remembered ids so closed windows that were never pruned cannot grow it forever.
+    /// Upper bound on remembered ids. Closed windows are never pruned explicitly: a window can drop
+    /// out of one listing and come back, and window ids are not reused, so stale ids are harmless.
     public static let capacity = 512
 
     /// Most recent first.
@@ -17,11 +18,6 @@ public struct MRUOrder: Sendable, Equatable {
         if let i = order.firstIndex(of: id) { order.remove(at: i) }
         order.insert(id, at: 0)
         if order.count > Self.capacity { order.removeLast(order.count - Self.capacity) }
-    }
-
-    /// Forget ids that no longer exist (closed windows).
-    public mutating func prune(keeping live: Set<UInt32>) {
-        order.removeAll { !live.contains($0) }
     }
 
     /// Known windows by recency, then windows never seen focused in their incoming order.

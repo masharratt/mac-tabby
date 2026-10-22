@@ -34,10 +34,14 @@ import Testing
         #expect(ids(mru.ordered([w(1), w(3)])) == [3, 1])
     }
 
-    @Test func pruneForgetsClosedWindows() {
+    // Bug: every inventory refresh pruned ids missing from that one listing. A window focused just
+    // before a refresh that had not listed it yet (new window, full-screen transition, listing
+    // without Screen Recording) lost its rank and came back at the very end of the switcher.
+    @Test func windowMissingFromOneListingKeepsItsRankWhenItReturns() {
         var mru = MRUOrder(seed: [1, 2, 3])
-        mru.prune(keeping: [1, 3])
-        #expect(mru.order == [1, 3])
+        mru.focused(9)
+        #expect(ids(mru.ordered([w(1), w(2), w(3)])) == [1, 2, 3])
+        #expect(ids(mru.ordered([w(1), w(2), w(3), w(9)])) == [9, 1, 2, 3])
     }
 
     @Test func focusedWindowNotYetListedLeadsWhenItAppears() {
