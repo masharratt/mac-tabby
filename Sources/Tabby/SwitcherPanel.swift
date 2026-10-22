@@ -6,8 +6,7 @@ import TabbyCore
 final class SwitcherPanel: NSPanel {
     /// Cached thumbnail lookup; must only read memory.
     var imageProvider: ((UInt32) -> CGImage?)?
-    /// Pointer moved onto the item at this index (only after the pointer really moved).
-    var onHover: ((Int) -> Void)?
+    /// Hover never changes the selection; a click on an item picks it.
     var onClickItem: ((Int) -> Void)?
     var onAction: ((ItemAction, Int) -> Void)?
     /// Whether hover controls make sense for a window (needs an AX element). May call AX.
@@ -132,13 +131,18 @@ final class SwitcherPanel: NSPanel {
         guard NSEvent.mouseLocation != openMouse else { return }
         hoveredIndex = index
         refreshControls()
-        onHover?(index)
     }
 
-    /// Controls show on the item that is both hovered and selected, and only when AX can reach it.
+    private func hoverEnded(_ index: Int) {
+        guard hoveredIndex == index else { return }
+        hoveredIndex = nil
+        refreshControls()
+    }
+
+    /// Controls show on the hovered item, and only when AX can reach it.
     private func refreshControls() {
         for (index, view) in items {
-            let wanted = index == hoveredIndex && index == selection && windows.indices.contains(index)
+            let wanted = index == hoveredIndex && windows.indices.contains(index)
             view.setControlsVisible(wanted && hasControls(windows[index]))
         }
     }
@@ -174,6 +178,7 @@ final class SwitcherPanel: NSPanel {
             let view = makeItem(for: windows[index], frame: frame)
             view.index = index
             view.onHover = { [weak self, weak view] in if let view { self?.hover(view.index) } }
+            view.onHoverEnded = { [weak self, weak view] in if let view { self?.hoverEnded(view.index) } }
             view.onClick = { [weak self, weak view] in if let view { self?.onClickItem?(view.index) } }
             view.onAction = { [weak self, weak view] action in if let view { self?.onAction?(action, view.index) } }
             view.setSelected(index == selection)

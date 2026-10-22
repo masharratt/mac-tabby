@@ -55,40 +55,16 @@ import Testing
         #expect(m.handle(.optionReleased, at: 0.4).effects.isEmpty)
     }
 
-    @Test func hoverChangesSelection() {
+    // Pointer hover is deliberately not a switcher event: a panel opening under a resting pointer
+    // used to steal the selection, so releasing Option focused the wrong window. Only a click picks.
+    @Test func optionReleaseCommitsKeyboardSelectionWhateverThePointerIsOver() {
         var m = shown()
-        let out = m.handle(.hover(3), at: 0.3)
-        #expect(out.effects == [.selectionChanged(3)])
-        #expect(m.selection == 3)
-        #expect(m.state == .shown)
-    }
-
-    @Test func hoverOnSelectedItemEmitsNothing() {
-        var m = shown()
-        #expect(m.handle(.hover(m.selection), at: 0.3).effects.isEmpty)
-    }
-
-    @Test func hoverIgnoredWhenNotShownOrOutOfRange() {
-        var armed = SwitcherStateMachine(showDelay: 0.1)
-        _ = armed.handle(.tab(reverse: false, windowCount: 3), at: 0)
-        #expect(armed.handle(.hover(2), at: 0.01).effects.isEmpty)
-        #expect(armed.selection == 1)
-
-        var m = shown(count: 3)
-        #expect(m.handle(.hover(7), at: 0.3).effects.isEmpty)
-        #expect(m.selection == 1)
-    }
-
-    @Test func keyboardContinuesFromHoveredItem() {
-        var m = shown()
-        _ = m.handle(.hover(2), at: 0.3)
-        _ = m.handle(.arrow(.next), at: 0.4)
-        #expect(m.selection == 3)
+        #expect(m.handle(.optionReleased, at: 0.3).effects == [.commit(1)])
     }
 
     @Test func removingSelectedMiddleItemKeepsNeighbourSelected() {
         var m = shown(count: 4)
-        _ = m.handle(.hover(2), at: 0.3)
+        _ = m.handle(.arrow(.next), at: 0.3)
         let out = m.handle(.windowsRemoved([2]), at: 0.4)
         #expect(out.effects == [.listChanged(selection: 2)])
         #expect(m.selection == 2)
@@ -100,7 +76,8 @@ import Testing
 
     @Test func removingEarlierItemShiftsSelectionDown() {
         var m = shown(count: 4)
-        _ = m.handle(.hover(3), at: 0.3)
+        _ = m.handle(.arrow(.next), at: 0.3)
+        _ = m.handle(.arrow(.next), at: 0.3)
         _ = m.handle(.windowsRemoved([0]), at: 0.4)
         #expect(m.selection == 2)
     }

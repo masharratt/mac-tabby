@@ -29,8 +29,6 @@ public enum SwitcherEvent: Equatable, Sendable {
     case outsideClick
     /// Mouse went down on the item at this index.
     case itemClick(Int)
-    /// Pointer entered the item at this index.
-    case hover(Int)
     /// These indices were closed or quit from the panel; the list shrank in place.
     case windowsRemoved([Int])
 }
@@ -124,12 +122,6 @@ public struct SwitcherStateMachine: Sendable {
                 return SwitcherOutput(swallow: false, effects: [])
             }
             return finish(.commit(index), swallow: true)
-        case let .hover(index):
-            guard state == .shown, (0..<windowCount).contains(index), index != selection else {
-                return SwitcherOutput(swallow: false, effects: [])
-            }
-            selection = index
-            return SwitcherOutput(swallow: false, effects: [.selectionChanged(index)])
         case let .windowsRemoved(indices):
             let removed = Set(indices)
             guard let next = SelectionIndex.afterRemoval(selected: selection, removed: removed, count: windowCount) else {

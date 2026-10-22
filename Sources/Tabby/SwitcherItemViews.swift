@@ -10,6 +10,7 @@ class SwitcherItemView: NSView {
     var index = 0
     /// Pointer entered or moved over the item.
     var onHover: (() -> Void)?
+    var onHoverEnded: (() -> Void)?
     var onClick: (() -> Void)?
     var onAction: ((ItemAction) -> Void)?
     /// Row layouts centre the controls on the right edge; tiles put them over the picture.
@@ -72,6 +73,7 @@ class SwitcherItemView: NSView {
     override func mouseDown(with event: NSEvent) { onClick?() }
     override func mouseEntered(with event: NSEvent) { onHover?() }
     override func mouseMoved(with event: NSEvent) { onHover?() }
+    override func mouseExited(with event: NSEvent) { onHoverEnded?() }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

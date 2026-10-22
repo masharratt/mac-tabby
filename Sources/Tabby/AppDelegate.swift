@@ -58,7 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         thumbnails.apply(s)
         panel.imageProvider = { [thumbnails] in thumbnails.image(for: $0) }
         panel.controlsAvailable = { WindowControls.isAvailable($0) }
-        panel.onHover = { [engine] in engine.hover($0) }
         panel.onClickItem = { [engine] in engine.itemClick($0) }
         panel.onAction = { [weak self] action, index in self?.perform(action, at: index) }
         thumbnails.windowLookup = { [inventory] in inventory.scWindow(id: $0) }

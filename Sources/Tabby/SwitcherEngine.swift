@@ -44,9 +44,6 @@ final class SwitcherEngine {
 
     func snapshot() -> (windows: [WindowInfo], selection: Int) { locked { (windows, machine.selection) } }
 
-    /// Main thread: pointer entered an item.
-    func hover(_ index: Int) { feed(.hover(index)) }
-
     /// Main thread: click landed on an item.
     func itemClick(_ index: Int) { feed(.itemClick(index)) }
 
